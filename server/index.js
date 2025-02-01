@@ -17,11 +17,15 @@ io.on('connection', (socket) => {
   let ffmpegProcess = null;
   let isStreamEnding = false;
 
-  socket.on('startStreaming', ({ rtmpUrl, streamKey, circle }) => {
+  socket.on('join',(room)=>{
+    socket.join(room)
+    console.log(socket.id,"joined")
+  })
+
+  socket.on('startStreaming', ({ rtmpUrl, streamKey }) => {
     const fullRTMPUrl = `${rtmpUrl}/${streamKey}`;
     console.log('Starting stream to:', fullRTMPUrl);
     isStreamEnding = false;
-    console.log(circle)
     
     const options = [
       '-i',

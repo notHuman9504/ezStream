@@ -3,7 +3,6 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import Header from "./components/layout/Header"
 import ReduxWrapper from "@/redux/ReduxWrapper"
-import SlidingDiv from "./components/ui/slidingDiv"
 
 
 const inter = Inter({

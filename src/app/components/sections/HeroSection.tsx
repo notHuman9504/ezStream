@@ -1,10 +1,8 @@
 'use client'
 
 import { Button } from "@/components/ui/button"
-import { setLoading } from "@/redux/loading/loadingSlice";
 import { motion } from "framer-motion"
-import { useRouter } from "next/navigation";
-import { useDispatch } from "react-redux";
+import myRouter from "@/lib/route"
 
 const containerVariants = {
   animate: {
@@ -29,8 +27,7 @@ const letterVariants = {
 
 const HeroSection = () => {
   const letters = "Stream".split("")
-  const router = useRouter();
-  const dispatch = useDispatch();
+  const redirect = myRouter();
 
   return (
     <section className="w-full h-screen flex justify-center items-center md:py-24 lg:py-32 xl:py-48 bg-black text-white">
@@ -61,12 +58,8 @@ const HeroSection = () => {
           </div>
           <div className="space-x-4">
             <Button className="bg-white text-black hover:bg-white/90" onClick={() =>{
-              dispatch(setLoading('exit'))
-              setTimeout(() => {
-                router.push('/stream')
-              }, 1500)
-              
-              }}>Get Started</Button>
+              redirect('/stream')
+              }}>Start Streaming</Button>
             <Button variant="outline" className="border-white bg-black text-white hover:bg-white/10 hover:text-white">Learn More</Button>
           </div>
         </div>

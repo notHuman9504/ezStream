@@ -8,7 +8,6 @@ import CTASection from './components/sections/CTASection';
 import HowItWorksSection from './components/sections/HowItWorksSection';
 
 export default function Home() {
-  const userEmail = useSelector((state: RootState) => state.user.email);
   return (
     
       <div className="flex flex-col min-h-screen">
