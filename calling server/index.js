@@ -9,15 +9,15 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "http://192.168.119.220:3000",
+    origin: "http://localhost:3000",
     methods: ["GET", "POST"]
   }
 });
 
 io.on('connection', (socket) => {
   const rooms = new Map();
-  let currentRoom = null;
-
+    let currentRoom = null;
+  
   const cleanup = (roomId) => {
     if (rooms.has(roomId)) {
       const room = rooms.get(roomId);
@@ -100,8 +100,8 @@ io.on('connection', (socket) => {
       }
     }
     socket.to(roomId).emit('user-screen-share-stopped', socket.id);
+    });
   });
-});
 
 const PORT = 8000;
 server.listen(PORT, () => {

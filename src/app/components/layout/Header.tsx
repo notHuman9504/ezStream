@@ -16,7 +16,7 @@ export default function Header() {
     };
 
     return (
-        <header style={{mixBlendMode:"difference"}} className="sticky bg-black top-0 left-0 right-0 z-40 w-full px-4 py-3">
+        <header className="sticky bg-black top-0 left-0 right-0 z-40 w-full px-4 py-3">
             <div className="container mx-auto flex justify-between items-center">
                 <div 
                     className="text-xl font-bold cursor-pointer text-white" 

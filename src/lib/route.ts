@@ -6,7 +6,7 @@ const myRouter = () => {
   const router = useRouter();
   const dispatch = useDispatch();
   const pathname = usePathname();
-  const redirectWithDelay = (path:string, loadingState = 'exit', delay = 2000) => {
+  const redirectWithDelay = (path:string, loadingState = 'cover', delay = 1300) => {
     if (pathname === path) {
       
       return;

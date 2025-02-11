@@ -89,7 +89,7 @@ export default function StreamPage() {
     }
     const recorder = new MediaRecorder(stream, {
       audioBitsPerSecond: 128000,
-      videoBitsPerSecond: 2500000
+      videoBitsPerSecond: 3000000
     });
 
     setMediaRecorder(recorder);

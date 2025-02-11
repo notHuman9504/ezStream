@@ -58,7 +58,7 @@ const HeroSection = () => {
           </div>
           <div className="space-x-4">
             <Button className="bg-white text-black hover:bg-white/90" onClick={() =>{
-              redirect('/stream')
+              redirect('/call')
               }}>Start Streaming</Button>
             <Button variant="outline" className="border-white bg-black text-white hover:bg-white/10 hover:text-white">Learn More</Button>
           </div>

@@ -15,6 +15,27 @@ const SlidingDiv = ({ delay, color }: props) => {
   const dispatch = useDispatch();
   const phase = useSelector((state: RootState) => state.loading.loading);
   const [tempPhase, setTempPhase] = useState('initial');
+  const [pageLoaded, setPageLoaded] = useState(false);
+  const [componentMounted, setComponentMounted] = useState(false);
+
+  // Check component mount
+  useEffect(() => {
+    setComponentMounted(true);
+    return () => setComponentMounted(false);
+  }, []);
+
+  // Check page load
+  useEffect(() => {
+    const handleLoad = () => setPageLoaded(true);
+
+    if (document.readyState === 'complete') {
+      setPageLoaded(true);
+    } else {
+      window.addEventListener('load', handleLoad);
+    }
+
+    return () => window.removeEventListener('load', handleLoad);
+  }, []);
 
   useEffect(() => {
     if (phase !== 'initial') {
@@ -23,8 +44,9 @@ const SlidingDiv = ({ delay, color }: props) => {
     }
   }, [phase]);
 
+  // Animation sequence starts only when both conditions are met
   useEffect(() => {
-    if (tempPhase === 'initial') {
+    if (tempPhase === 'initial' && pageLoaded && componentMounted) {
       setTimeout(() => {
         setTempPhase('cover');
       }, 600 + delay * 50);
@@ -34,7 +56,7 @@ const SlidingDiv = ({ delay, color }: props) => {
         setTempPhase('exit');
       }, 1500);
     }
-  }, [tempPhase]);
+  }, [tempPhase, pageLoaded, componentMounted, delay]);
 
   return (
     <>
@@ -45,21 +67,20 @@ const SlidingDiv = ({ delay, color }: props) => {
         `}
       </style>
       <div
-        className={`fixed left-0 w-full h-screen bg-${color} z-[100] transition-all ease-in-out
+        className={`fixed left-0 w-full h-screen bg-${color} z-[100] transition-all ease-in-out flex items-end justify-center
           ${tempPhase === 'initial' ? 'translate-y-full duration-0' : ''}
           ${tempPhase === 'cover' ? 'translate-y-0 duration-1000' : ''}
           ${tempPhase === 'exit' ? '-translate-y-full duration-1000' : ''}
         `}
       >
         <div
-          className="text-black"
           style={{
-            fontSize: '200px',
-            fontFamily: "'Bungee Inline', cursive", 
-            position: 'absolute',
-            bottom: '20px',
+            fontFamily: "'Bungee Inline', cursive",
             textAlign: 'center',
-            width: '100%',
+            fontSize: 'min(15vw, 300px)',
+            lineHeight: '1',
+            letterSpacing: '-0.02em',
+            whiteSpace: 'nowrap',
           }}
         >
           STREAM

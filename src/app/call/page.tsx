@@ -1,6 +1,8 @@
 "use client"
 import { useState, useRef, useEffect } from 'react';
 import io, { Socket } from 'socket.io-client';
+import VideoCanvas from '../components/layout/videoCanvas';
+import { Video, VideoOff } from 'lucide-react';
 
 interface Participant {
   userId: string;
@@ -12,6 +14,7 @@ export default function CallPage() {
   const [roomId, setRoomId] = useState('');
   const [joined, setJoined] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const streamingSocketRef = useRef<Socket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<{ [key: string]: RTCPeerConnection }>({});
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -20,10 +23,52 @@ export default function CallPage() {
   const screenStreamRef = useRef<MediaStream | null>(null);
   const [activeRoom, setActiveRoom] = useState<string>('');
 
+  const [selectedVideos, setSelectedVideos] = useState<HTMLVideoElement[]>([]);
+
+  // Add these states at the top
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [rtmpUrl, setRtmpUrl] = useState('');
+  const [streamKey, setStreamKey] = useState('');
+  const canvasStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+
+  // Add at the top with other state
+  const [initialJoin, setInitialJoin] = useState(true);
+
+  // Add function to generate random room ID
+  const generateRoomId = () => {
+    return Math.random().toString(36).substring(2, 8);
+  };
+
+  // Modify useEffect to auto-join on first load
+  useEffect(() => {
+    if (initialJoin) {
+      const randomRoom = generateRoomId();
+      setRoomId(randomRoom);
+      joinRoom(randomRoom);
+      setInitialJoin(false);
+    }
+  }, [initialJoin]);
+
   // Socket setup
   useEffect(() => {
-    socketRef.current = io('http://192.168.119.220:8000');
+    // Video calling socket
+    socketRef.current = io('http://localhost:8000', {
+      transports: ['websocket'],
+      reconnectionAttempts: 5
+    });
     
+    // Streaming socket
+    streamingSocketRef.current = io('http://localhost:5000', {
+      transports: ['websocket'],
+      reconnectionAttempts: 5
+    });
+    
+    // Video calling socket events
+    socketRef.current.on('connect_error', (error) => {
+      console.error('Video call socket error:', error);
+    });
+
     socketRef.current.on('existing-users', (userIds: string[]) => {
       userIds.forEach(userId => {
         if (userId !== socketRef.current?.id && !peersRef.current[userId]) {
@@ -33,15 +78,19 @@ export default function CallPage() {
       });
     });
 
+    // Streaming socket events
+    streamingSocketRef.current.on('connect_error', (error) => {
+      console.error('Streaming socket error:', error);
+    });
+
     return () => {
       socketRef.current?.disconnect();
+      streamingSocketRef.current?.disconnect();
     };
   }, []);
 
   // Join room and setup local stream
-  const joinRoom = async () => {
-    if (!roomId) return;
-
+  const joinRoom = async (roomToJoin: string) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -55,8 +104,8 @@ export default function CallPage() {
         isLocal: true
       }]);
       
-      setActiveRoom(roomId);
-      socketRef.current?.emit('join-room', roomId);
+      setActiveRoom(roomToJoin);
+      socketRef.current?.emit('join-room', roomToJoin);
       setJoined(true);
     } catch (err) {
       console.error('Error accessing media devices:', err);
@@ -312,37 +361,61 @@ export default function CallPage() {
   // Add screen share function
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
-      // Stop screen sharing
-      screenStreamRef.current?.getTracks().forEach(track => track.stop());
+      // Capture the screen stream reference before cleanup
+      const screenStream = screenStreamRef.current;
       
-      // Remove only screen share stream from participants
+      // Stop all screen tracks
+      screenStream?.getTracks().forEach(track => {
+        track.stop();
+        // Remove from all peer connections
+        Object.values(peersRef.current).forEach(peer => {
+          const sender = peer.getSenders().find(s => s.track === track);
+          if (sender) peer.removeTrack(sender);
+        });
+      });
+
+      // Clean up participant streams
       setParticipants(prev => 
         prev.map(p => 
           p.isLocal
-            ? { ...p, streams: p.streams.filter(s => s !== screenStreamRef.current) }
+            ? { 
+                ...p, 
+                streams: p.streams.filter(s => s.id !== screenStream?.id)
+              }
             : p
         )
       );
 
-      // Only remove screen share tracks
-      Object.values(peersRef.current).forEach(peer => {
-        const screenSenders = peer.getSenders().filter(sender => {
-          return sender.track && screenStreamRef.current?.getTracks().includes(sender.track);
-        });
-        
-        screenSenders.forEach(sender => peer.removeTrack(sender));
-      });
+      // Remove any video elements using the screen stream
+      setSelectedVideos(prev => 
+        prev.filter(video => 
+          !(video.srcObject instanceof MediaStream) ||
+          (video.srcObject as MediaStream).id !== screenStream?.id
+        )
+      );
 
-      socketRef.current?.emit('screen-share-stopped', activeRoom);
+      // Clean up refs and state
       screenStreamRef.current = null;
       setIsScreenSharing(false);
+      socketRef.current?.emit('screen-share-stopped', activeRoom);
+
+      // Refresh peer connections
+      Object.entries(peersRef.current).forEach(async ([userId, peer]) => {
+        try {
+          const offer = await peer.createOffer();
+          await peer.setLocalDescription(offer);
+          socketRef.current?.emit('offer', { offer, to: userId });
+        } catch (err) {
+          console.error('Error refreshing peer connection:', err);
+        }
+      });
     } else {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
           audio: true
         });
-
+        
         screenStreamRef.current = screenStream;
         setIsScreenSharing(true);
 
@@ -387,66 +460,188 @@ export default function CallPage() {
     }
   };
 
+  const handleVideoClick = (videoElement: HTMLVideoElement) => {
+    setSelectedVideos(prev => {
+      const exists = prev.includes(videoElement);
+      if (exists) {
+        // Remove if already selected
+        return prev.filter(v => v !== videoElement);
+      } else {
+        // Add if not selected
+        return [...prev, videoElement];
+      }
+    });
+  };
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-md mb-8">
-        <h1 className="text-2xl mb-4">Join a Room</h1>
-        <input
-          type="text"
-          placeholder="Enter Room ID"
-          className="border p-2 rounded mb-4 w-full"
-          value={roomId}
-          onChange={(e) => setRoomId(e.target.value)}
-        />
-        <div className="flex gap-2">
-          <button
-            onClick={joinRoom}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-          >
-            Join Room
-          </button>
-          {joined && (
-            <button
-              onClick={toggleScreenShare}
-              className={`px-4 py-2 rounded text-white ${
-                isScreenSharing 
-                  ? 'bg-red-500 hover:bg-red-600' 
-                  : 'bg-green-500 hover:bg-green-600'
-              }`}
-            >
-              {isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
-            </button>
-          )}
-        </div>
+    <div className="h-[calc(100vh-64px)] bg-black text-white p-8">
+      {/* Main Container */}
+      <div className="max-w-[2000px] mx-auto">
+        {/* Top Section - Canvas and Room Join */}
+        <div className="flex gap-8 mb-8 h-[400px]">
+          {/* Canvas Section - Left */}
+          <div className="flex-1 bg-zinc-900 rounded-xl overflow-hidden shadow-2xl flex items-center justify-center">
+            <VideoCanvas 
+              videoRefs={selectedVideos} 
+              isStreaming={isStreaming}
+              streamingSocket={streamingSocketRef.current}
+              rtmpUrl={rtmpUrl}
+              streamKey={streamKey}
+              width={640}
+              height={360}
+              fps={45}
+            />
+          </div>
+
+          {/* Room Controls - Right */}
+          <div className="w-[500px] bg-zinc-900 p-4 rounded-xl shadow-2xl">
+            <div className="flex gap-4">
+              {/* Join Room Section */}
+              <div className="flex-1">
+                <h1 className="text-xl font-bold mb-4 text-white">Room: {roomId}</h1>
+                <input
+                  type="text"
+                  placeholder="Enter new room ID"
+                  className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
+                  value={roomId}
+                  onChange={(e) => setRoomId(e.target.value)}
+                />
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => joinRoom(roomId)}
+                    className="w-full py-3 rounded-lg bg-white text-black font-semibold hover:bg-zinc-200 transition-colors"
+                  >
+                    Change Room
+                  </button>
+                  <button
+                    onClick={toggleScreenShare}
+                    className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                      isScreenSharing 
+                        ? 'bg-zinc-800 text-white hover:bg-zinc-700' 
+                        : 'bg-white text-black hover:bg-zinc-200'
+                    }`}
+                  >
+                    {isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
+                  </button>
+                </div>
       </div>
 
-      <div className="w-full max-w-6xl px-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {participants.map((participant) => 
-            participant.streams.map((stream, streamIndex) => (
-              <div
-                key={`${participant.userId}-${streamIndex}`}
-                className="aspect-video bg-black rounded-lg overflow-hidden relative"
-              >
-                <video
-                  ref={el => {
-                    if (el && el.srcObject !== stream) {
-                      el.srcObject = stream;
-                      el.play().catch(console.error);
-                    }
-                  }}
-                  autoPlay
-                  playsInline
-                  muted={participant.isLocal}
-                  className="w-full h-full object-cover"
+              {/* Streaming Controls */}
+              <div className="flex-1 border-l border-zinc-800 pl-4">
+                <h2 className="text-xl font-bold mb-4">Stream Settings</h2>
+        <input
+          type="text"
+                  placeholder="RTMP URL"
+                  value={rtmpUrl}
+                  onChange={(e) => setRtmpUrl(e.target.value)}
+                  className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
                 />
-                <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-                  {participant.isLocal ? 'You' : participant.userId} 
-                  {participant.streams.length > 1 && ` - Stream ${streamIndex + 1}`}
-                </div>
+                <input
+                  type="password"
+                  placeholder="Stream Key"
+                  value={streamKey}
+                  onChange={(e) => setStreamKey(e.target.value)}
+                  className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
+        />
+        <button
+                  onClick={() => setIsStreaming(!isStreaming)}
+                  disabled={selectedVideos.length === 0}
+                  className={`w-full py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
+                    isStreaming 
+                      ? 'bg-zinc-800 text-white hover:bg-zinc-700' 
+                      : 'bg-white text-black hover:bg-zinc-200'
+                  } ${selectedVideos.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {isStreaming ? (
+                    <>
+                      <VideoOff className="w-4 h-4" />
+                      Stop Streaming
+                    </>
+                  ) : (
+                    <>
+                      <Video className="w-4 h-4" />
+                      Start Streaming
+                    </>
+                  )}
+        </button>
               </div>
-            ))
-          )}
+            </div>
+          </div>
+        </div>
+
+        {/* Video Grid Section */}
+        <div className="bg-zinc-900 p-6 rounded-xl shadow-2xl mt-4">
+          <h2 className="text-xl font-bold mb-4">Available Streams</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+            {participants.map((participant) => 
+              participant.streams.map((stream, streamIndex) => (
+                <div
+                  key={`${participant.userId}-${streamIndex}`}
+                  className="relative aspect-video bg-black rounded-lg overflow-hidden group cursor-pointer transform hover:scale-[1.02] transition-transform"
+                  onClick={(e) => {
+                    const video = e.currentTarget.querySelector('video');
+                    if (video) handleVideoClick(video);
+                  }}
+                >
+                  <video
+                    ref={el => {
+                      if (el && el.srcObject !== stream) {
+                        el.srcObject = stream;
+                        // Add retry logic for play failures
+                        const playVideo = async () => {
+                          try {
+                            // Only play if video is paused
+                            if (el.paused) {
+                              await el.play();
+                            }
+                          } catch (err) {
+                            if (err instanceof Error) {
+                              // Handle abort errors by retrying
+                              if (err.name === 'AbortError') {
+                                console.log('Retrying video playback...');
+                                // Retry after a short delay
+                                setTimeout(playVideo, 100);
+                              } else {
+                                console.error('Video playback error:', err);
+                              }
+                            }
+                          }
+                        };
+                        playVideo();
+                      }
+                    }}
+                    autoPlay
+                    playsInline
+                    muted={participant.isLocal}
+                    className="w-full h-full object-cover"
+                    onLoadedMetadata={(e) => {
+                      // Ensure video plays when metadata is loaded
+                      const video = e.target as HTMLVideoElement;
+                      if (video.paused) {
+                        video.play().catch(err => {
+                          if (err.name !== 'AbortError') {
+                            console.error('Error playing video:', err);
+                          }
+                        });
+                      }
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-sm">
+                    <span className="bg-black/50 px-2 py-1 rounded">
+                      {participant.isLocal ? 'You' : participant.userId}
+                      {participant.streams.length > 1 && ` - Stream ${streamIndex + 1}`}
+                    </span>
+                    {selectedVideos.find(v => v.srcObject === stream) && (
+                      <span className="bg-white text-black px-2 py-1 rounded-full text-xs">
+                        Selected
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

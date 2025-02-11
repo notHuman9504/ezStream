@@ -6,117 +6,87 @@ import { Server as SocketIO } from 'socket.io';
 
 const app = express();
 const server = http.createServer(app);
-const io = new SocketIO(server);
-
-let ffmpegProcess = null;
+const io = new SocketIO(server, {
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
 
 app.use(express.static(path.resolve('./public')));
 
 io.on('connection', (socket) => {
-  console.log('Socket Connected', socket.id);
+  console.log('Client connected:', socket.id);
   let ffmpegProcess = null;
-  let isStreamEnding = false;
 
-  socket.on('join',(room)=>{
-    socket.join(room)
-    console.log(socket.id,"joined")
-  })
+  const startFFmpeg = (config) => {
+    const { rtmpUrl, streamKey, settings } = config;
+    const outputUrl = `${rtmpUrl}/${streamKey}`;
+    settings.bitrate = 1000000;
 
-  socket.on('startStreaming', ({ rtmpUrl, streamKey }) => {
-    const fullRTMPUrl = `${rtmpUrl}/${streamKey}`;
-    console.log('Starting stream to:', fullRTMPUrl);
-    isStreamEnding = false;
-    
-    const options = [
-      '-i',
-      '-',
+    const args = [
+      '-analyzeduration', '0',
+      '-probesize', '32',
+      '-f', 'webm',
+      '-i', '-',
       '-c:v', 'libx264',
-      '-preset', 'ultrafast',
+      '-preset', 'veryfast',
       '-tune', 'zerolatency',
-      '-r', '30',
-      '-g', '60',
-      '-keyint_min', '30',
-      '-crf', '25',
+      '-b:v', `${settings.bitrate}`,
+      '-maxrate', `${settings.bitrate}`,
+      '-bufsize', `${settings.bitrate * 2}`,
       '-pix_fmt', 'yuv420p',
-      '-sc_threshold', '0',
-      '-profile:v', 'main',
-      '-level', '3.1',
+      '-g', '60',
+      '-r', `${settings.fps}`,
       '-c:a', 'aac',
       '-b:a', '128k',
       '-ar', '44100',
       '-f', 'flv',
-      fullRTMPUrl,
+      '-flvflags', 'no_duration_filesize',
+      outputUrl
     ];
 
-    ffmpegProcess = spawn('ffmpeg', options);
-
-    // Handle FFmpeg process errors
-    ffmpegProcess.on('error', (error) => {
-      console.error('FFmpeg process error:', error);
-    });
-
-    // Handle stdin errors
-    ffmpegProcess.stdin.on('error', (error) => {
-      if (!isStreamEnding || error.code !== 'EOF') {
-        console.error('FFmpeg stdin error:', error);
-      }
-    });
-
-    ffmpegProcess.stdout.on('data', (data) => {
-      console.log(`ffmpeg stdout: ${data}`);
-    });
+    ffmpegProcess = spawn('ffmpeg', args);
 
     ffmpegProcess.stderr.on('data', (data) => {
-      console.error(`ffmpeg stderr: ${data}`);
+      console.log('[FFmpeg]', data.toString());
     });
 
-    ffmpegProcess.on('close', (code) => {
-      console.log(`ffmpeg process exited with code ${code}`);
+    ffmpegProcess.on('exit', (code) => {
+      console.log(`FFmpeg exited with code ${code}`);
       ffmpegProcess = null;
     });
-  });
-
-  socket.on('binarystream', (stream) => {
-    try {
-      if (ffmpegProcess && ffmpegProcess.stdin.writable && !isStreamEnding) {
-        ffmpegProcess.stdin.write(stream, (err) => {
-          if (err && err.code !== 'EOF') {
-            console.error('Error writing to ffmpeg:', err);
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error in binarystream:', error);
-    }
-  });
-
-  const cleanupFFmpeg = () => {
-    try {
-      if (ffmpegProcess) {
-        isStreamEnding = true;
-        console.log('Stopping stream gracefully...');
-        
-        // End stdin stream first
-        if (ffmpegProcess.stdin) {
-          ffmpegProcess.stdin.end();
-        }
-
-        // Give FFmpeg a moment to process remaining data
-        setTimeout(() => {
-          if (ffmpegProcess) {
-            ffmpegProcess.kill('SIGTERM');
-            ffmpegProcess = null;
-            console.log('Stream stopped successfully');
-          }
-        }, 100);
-      }
-    } catch (error) {
-      console.error('Error during cleanup:', error);
-    }
   };
 
-  socket.on('stopStreaming', cleanupFFmpeg);
-  socket.on('disconnect', cleanupFFmpeg);
+  socket.on('stream:start', (config) => {
+    console.log('Starting stream to:', config.rtmpUrl);
+    startFFmpeg(config);
+  });
+
+  socket.on('stream:data', (data) => {
+    if (ffmpegProcess?.stdin.writable) {
+      ffmpegProcess.stdin.write(data, (err) => {
+        if (err) console.error('Stream write error:', err);
+      });
+    }
+  });
+
+  socket.on('stream:stop', () => {
+    if (ffmpegProcess) {
+      ffmpegProcess.stdin.end();
+      ffmpegProcess.kill('SIGINT');
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+    if (ffmpegProcess) {
+      ffmpegProcess.kill('SIGINT');
+    }
+  });
 });
 
-server.listen(5000, () => console.log(`HTTP Server is running on PORT 5000`));
+server.listen(5000, () => {
+  console.log('Signaling server running on port 5000');
+});

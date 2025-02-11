@@ -1,48 +1,76 @@
-  interface StepCardProps {
-    number: number;
-    title: string;
-    description: string;
+import { motion } from 'framer-motion';
+import { useInView } from 'react-intersection-observer';
+import { ArrowRight } from 'lucide-react';
+
+const steps = [
+  {
+    number: "01",
+    title: "Sign Up",
+    description: "Create your account in seconds with just your email"
+  },
+  {
+    number: "02",
+    title: "Configure Stream",
+    description: "Choose your platforms and customize your stream settings"
+  },
+  {
+    number: "03",
+    title: "Go Live",
+    description: "Start streaming to multiple platforms with one click"
   }
+];
 
-  const StepCard = ({ number, title, description }: StepCardProps) => (
-    <div className="flex flex-col items-center text-center">
-      <div className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center text-xl font-bold mb-4">
-        {number}
-      </div>
-      <h3 className="text-xl font-bold mb-2 text-white">{title}</h3>
-      <p className="text-gray-400">{description}</p>
-    </div>
-  )
+const HowItWorksSection = () => {
+  const [ref, inView] = useInView({
+    triggerOnce: true,
+    threshold: 0.1,
+  });
 
-  const steps = [
-    {
-      number: 1,
-      title: "Sign Up",
-      description: "Create your ezStream account in seconds."
-    },
-    {
-      number: 2,
-      title: "Connect Platforms",
-      description: "Link your YouTube, Twitch, or other streaming accounts."
-    },
-    {
-      number: 3,
-      title: "Start Streaming",
-      description: "Click 'Go Live' and start broadcasting to your audience."
-    }
-  ]
+  return (
+    <section className="w-full py-20 bg-black">
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, y: 50 }}
+        animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
+        transition={{ duration: 0.5 }}
+        className="container mx-auto px-4"
+      >
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            Start Streaming in Minutes
+          </h2>
+          <p className="text-zinc-400 max-w-2xl mx-auto">
+            Three simple steps to go live on multiple platforms
+          </p>
+        </div>
 
-  const HowItWorksSection = () => (
-    <section id="how-it-works" className="w-full h-screen flex justify-center items-center py-12 md:py-24 lg:py-32 bg-black">
-      <div className="container px-4 md:px-6">
-        <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-center mb-12 text-white">How It Works</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {steps.map((step) => (
-            <StepCard key={step.number} {...step} />
+          {steps.map((step, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, x: -20 }}
+              animate={inView ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
+              transition={{ duration: 0.5, delay: index * 0.2 }}
+              className="relative p-6 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-all duration-300"
+            >
+              <div className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-blue-500 mb-4">
+                {step.number}
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-2">
+                {step.title}
+              </h3>
+              <p className="text-zinc-400">
+                {step.description}
+              </p>
+              {index < steps.length - 1 && (
+                <ArrowRight className="absolute -right-4 top-1/2 transform -translate-y-1/2 text-zinc-700 hidden md:block" />
+              )}
+            </motion.div>
           ))}
         </div>
-      </div>
+      </motion.div>
     </section>
-  )
+  );
+};
 
-  export default HowItWorksSection;
+export default HowItWorksSection;

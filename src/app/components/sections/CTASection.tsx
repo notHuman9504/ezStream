@@ -1,36 +1,54 @@
-import { ArrowRight } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { motion } from 'framer-motion';
+import { useInView } from 'react-intersection-observer';
+import { ArrowRight } from 'lucide-react';
+import myRouter from '@/lib/route';
 
-const CTASection = () => (
-  <section className="w-full py-12 md:py-24 lg:py-32 bg-white text-black h-screen flex justify-center items-center">
-    <div className="container px-4 md:px-6">
-      <div className="flex flex-col items-center space-y-4 text-center">
-        <div className="space-y-2">
-          <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl">Ready to Start Streaming?</h2>
-          <p className="mx-auto max-w-[600px] text-gray-600 md:text-xl">
-            Join ezStream today and start broadcasting to your audience in minutes.
+const CTASection = () => {
+  const redirect = myRouter();
+  const [ref, inView] = useInView({
+    triggerOnce: true,
+    threshold: 0.1,
+  });
+
+  return (
+    <section className="w-full py-20 bg-white">
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, y: 50 }}
+        animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
+        transition={{ duration: 0.5 }}
+        className="container mx-auto px-4"
+      >
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-4xl md:text-5xl font-bold text-black mb-6">
+            Ready to Transform Your Streaming Experience?
+          </h2>
+          <p className="text-xl text-zinc-600 mb-8">
+            Join thousands of content creators who trust ezStream for their multi-platform streaming needs.
           </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => redirect('/signup')}
+              className="px-8 py-4 rounded-lg bg-black text-white font-semibold hover:bg-black/90 transition-all duration-300"
+            >
+              Get Started Free
+              <ArrowRight className="inline-block ml-2 w-5 h-5" />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => redirect('/stream')}
+              className="px-8 py-4 rounded-lg bg-zinc-200 text-black font-semibold hover:bg-zinc-300 transition-all duration-300"
+            >
+              Try Demo
+            </motion.button>
+          </div>
         </div>
-        <div className="w-full max-w-sm space-y-2">
-          <form className="flex space-x-2">
-            <Input
-              className="max-w-lg flex-1 bg-gray-100 text-black border-gray-200"
-              placeholder="Enter your email"
-              type="email"
-            />
-            <Button type="submit" className="bg-black text-white hover:bg-black/90">
-              Get Started
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </form>
-          <p className="text-xs text-gray-500">
-            By signing up, you agree to our Terms of Service and Privacy Policy.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
-)
+      </motion.div>
+    </section>
+  );
+};
 
 export default CTASection;
