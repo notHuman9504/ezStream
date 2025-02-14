@@ -6,4 +6,12 @@ services:
     startCommand: npm start
     envVars:
       - key: NODE_ENV
-        value: production 
+        value: production
+      - key: PORT
+        value: 3000
+    buildFilter:
+      paths:
+      - src/**
+      - public/**
+      - package.json
+      - next.config.js 
