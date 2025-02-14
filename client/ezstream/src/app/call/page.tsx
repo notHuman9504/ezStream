@@ -59,7 +59,7 @@ export default function CallPage() {
     });
     
     // Streaming socket
-    streamingSocketRef.current = io('http://localhost:5000', {
+    streamingSocketRef.current = io('https://ezstream-server.onrender.com', {
       transports: ['websocket'],
       reconnectionAttempts: 5
     });
