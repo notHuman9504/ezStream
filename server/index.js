@@ -1,10 +1,18 @@
-require('dotenv').config();
+import dotenv from 'dotenv';
 import http from 'http';
 import path from 'path';
 import { spawn } from 'child_process';
 import express from 'express';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import { fileURLToPath } from 'url';
+
+// Configure dotenv
+dotenv.config();
+
+// Fix __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
@@ -25,7 +33,7 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e7
 });
 
-app.use(express.static(path.resolve('./public')));
+app.use(express.static(path.resolve(__dirname, './public')));
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
