@@ -1,17 +1,28 @@
+require('dotenv').config();
 import http from 'http';
 import path from 'path';
 import { spawn } from 'child_process';
 import express from 'express';
-import { Server as SocketIO } from 'socket.io';
+import { Server } from 'socket.io';
+import cors from 'cors';
 
 const app = express();
 const server = http.createServer(app);
-const io = new SocketIO(server, {
+
+// Updated CORS configuration
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
+
+const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST"],
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    methods: ['GET', 'POST'],
     credentials: true
-  }
+  },
+  maxHttpBufferSize: 1e7
 });
 
 app.use(express.static(path.resolve('./public')));
@@ -87,6 +98,7 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(5000, () => {
-  console.log('Signaling server running on port 5000');
+const PORT = process.env.PORT || 8000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
