@@ -53,7 +53,7 @@ export default function CallPage() {
   // Socket setup
   useEffect(() => {
     // Video calling socket
-    socketRef.current = io('http://localhost:8000', {
+    socketRef.current = io('https://ezstream-callingserver.onrender.com', {
       transports: ['websocket'],
       reconnectionAttempts: 5
     });
