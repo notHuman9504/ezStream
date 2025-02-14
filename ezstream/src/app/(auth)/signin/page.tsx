@@ -37,7 +37,7 @@ export default function SignIn() {
       localStorage.setItem('token', data.token);
       dispatch(setEmail(email));
       
-      router.push('/stream');
+      redirect('/call');
     } catch (err) {
       setError('Failed to sign in. Please check your credentials.');
     }

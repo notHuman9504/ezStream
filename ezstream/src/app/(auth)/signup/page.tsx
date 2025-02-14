@@ -35,7 +35,7 @@ export default function SignUp() {
       // Store token in localStorage or other state management solution
       localStorage.setItem('token', data.token);
       dispatch(setEmail(email));
-      router.push('/stream');
+      redirect('/call');
     } catch (err) {
       setError('Failed to create account');
     }
