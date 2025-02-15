@@ -52,63 +52,60 @@ export default function SignIn() {
 
   return (
     <div className="min-h-screen w-full flex">
-      {/* Left side - Black */}
-      <div className="hidden lg:flex w-1/2 bg-black items-center justify-center p-6">
+      {/* Left side - White */}
+      <div className="hidden lg:flex w-1/2 bg-white items-center justify-center p-6">
         <div className="max-w-lg">
-          <h1 className="text-4xl lg:text-5xl font-bold text-white mb-4">Welcome to ezStream</h1>
-          <p className="text-zinc-400 text-lg">
+          <h1 className="text-4xl lg:text-5xl font-bold text-black mb-4">Welcome to ezStream</h1>
+          <p className="text-zinc-600 text-lg">
             Stream directly from your browser to multiple platforms simultaneously.
           </p>
         </div>
       </div>
 
-      {/* Right side - White */}
-      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-6">
+      {/* Right side - Black */}
+      <div className="w-full lg:w-1/2 bg-black flex items-center justify-center p-6">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center space-y-2">
-            <h2 className="text-3xl font-bold tracking-tighter text-black">
+            <h2 className="text-3xl font-bold tracking-tighter text-white">
               Welcome Back
             </h2>
-            <p className="text-zinc-600 text-sm">
+            <p className="text-zinc-400 text-sm">
               Continue your streaming journey
             </p>
           </div>
 
           <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
             {error && (
-              <div className="text-red-500 text-sm text-center bg-red-50 py-2 rounded-lg">
+              <div className="text-red-500 text-sm text-center bg-red-50/10 py-2 rounded-lg">
                 {error}
               </div>
             )}
             
             <div className="space-y-5">
-              <div className="space-y-2">
-                <label htmlFor="email" className="block text-sm font-medium text-zinc-700">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-white block">
                   Email
                 </label>
                 <input
-                  id="email"
-                  name="email"
                   type="email"
+                  name="email"
                   required
-                  className="block w-full px-4 py-3 rounded-lg bg-white border border-zinc-200 text-black placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all duration-200"
-                  placeholder="name@example.com"
+                  className="w-full px-4 py-3 rounded-lg bg-white/10 border border-zinc-800 text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-white/40 transition-all duration-200"
+                  placeholder="Enter your email"
                   value={formData.email}
                   onChange={handleChange}
                 />
               </div>
-
-              <div className="space-y-2">
-                <label htmlFor="password" className="block text-sm font-medium text-zinc-700">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-white block">
                   Password
                 </label>
                 <input
-                  id="password"
-                  name="password"
                   type="password"
+                  name="password"
                   required
-                  className="block w-full px-4 py-3 rounded-lg bg-white border border-zinc-200 text-black placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all duration-200"
-                  placeholder="••••••••"
+                  className="w-full px-4 py-3 rounded-lg bg-white/10 border border-zinc-800 text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-white/40 transition-all duration-200"
+                  placeholder="Enter your password"
                   value={formData.password}
                   onChange={handleChange}
                 />
@@ -117,17 +114,17 @@ export default function SignIn() {
 
             <button
               type="submit"
-              className="w-full py-3 px-4 rounded-lg bg-black text-white font-medium hover:bg-black/90 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 transition-all duration-200"
+              className="w-full py-3 px-4 rounded-lg bg-white text-black font-medium hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black transition-all duration-200"
             >
               Sign in
             </button>
           </form>
 
-          <p className="text-center text-sm text-zinc-600">
+          <p className="text-center text-sm text-zinc-400">
             Don't have an account?{' '}
             <button 
               onClick={() => redirect('/signup')}
-              className="text-black hover:text-zinc-600 transition-colors font-medium"
+              className="text-white hover:text-zinc-300 transition-colors font-medium"
             >
               Sign up
             </button>
