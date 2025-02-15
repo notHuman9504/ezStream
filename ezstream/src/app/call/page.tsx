@@ -474,173 +474,255 @@ export default function CallPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
-      {/* Main Container */}
+    <div className="min-h-screen bg-gradient-to-b from-black via-zinc-900 to-black p-4 md:p-8">
       <div className="max-w-[2000px] mx-auto">
-        {/* Top Section - Canvas and Room Join */}
-        <div className="flex gap-8 mb-8 h-[400px]">
-          {/* Canvas Section - Left */}
-          <div className="flex-1 bg-zinc-900 rounded-xl overflow-hidden shadow-2xl flex items-center justify-center">
-            <VideoCanvas 
-              videoRefs={selectedVideos} 
-              isStreaming={isStreaming}
-              streamingSocket={streamingSocketRef.current}
-              rtmpUrl={rtmpUrl}
-              streamKey={streamKey}
-              width={640}
-              height={360}
-              fps={45}
-            />
-          </div>
-
-          {/* Room Controls - Right */}
-          <div className="w-[500px] bg-zinc-900 p-4 rounded-xl shadow-2xl">
-            <div className="flex gap-4">
-              {/* Join Room Section */}
-              <div className="flex-1">
-                <h1 className="text-xl font-bold mb-4 text-white">Room: {roomId}</h1>
-                <input
-                  type="text"
-                  placeholder="Enter new room ID"
-                  className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
-                  value={roomId}
-                  onChange={(e) => setRoomId(e.target.value)}
+        {/* Main Content */}
+        <div className="flex flex-col md:flex-row gap-4 md:gap-8">
+          {/* Left Side - Canvas and Settings */}
+          <div className="flex-1 flex flex-col gap-4 min-w-[65vw]">
+            {/* Canvas */}
+            <div className="relative h-[400px] min-w-[65vw] bg-black/20 backdrop-blur-xl rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+              <div className="relative h-full flex items-center justify-center">
+                <VideoCanvas 
+                  videoRefs={selectedVideos} 
+                  isStreaming={isStreaming}
+                  streamingSocket={streamingSocketRef.current}
+                  rtmpUrl={rtmpUrl}
+                  streamKey={streamKey}
+                  width={640}
+                  height={360}
+                  fps={45}
                 />
-                <div className="flex flex-col gap-3">
+              </div>
+            </div>
+
+            {/* Mobile - Below Canvas with Horizontal Scroll */}
+            <div className="md:hidden w-full bg-white/5 backdrop-blur-xl p-6 rounded-2xl shadow-2xl border border-white/10">
+              <h2 className="text-xl font-bold mb-4 text-white/90">Available Streams</h2>
+              <div className="flex overflow-x-auto pb-4 gap-4 snap-x snap-mandatory scrollbar-hide">
+                {participants.map((participant) => 
+                  participant.streams.map((stream, streamIndex) => (
+                    <div
+                      key={`${participant.userId}-${streamIndex}`}
+                      className="relative aspect-video bg-black rounded-lg overflow-hidden group cursor-pointer transform hover:scale-[1.02] transition-transform max-w-[35vw] snap-center"
+                      onClick={(e) => {
+                        const video = e.currentTarget.querySelector('video');
+                        if (video) handleVideoClick(video);
+                      }}
+                    >
+                      <video
+                        ref={el => {
+                          if (el && el.srcObject !== stream) {
+                            el.srcObject = stream;
+                            // Add retry logic for play failures
+                            const playVideo = async () => {
+                              try {
+                                // Only play if video is paused
+                                if (el.paused) {
+                                  await el.play();
+                                }
+                              } catch (err) {
+                                if (err instanceof Error) {
+                                  // Handle abort errors by retrying
+                                  if (err.name === 'AbortError') {
+                                    console.log('Retrying video playback...');
+                                    // Retry after a short delay
+                                    setTimeout(playVideo, 100);
+                                  } else {
+                                    console.error('Video playback error:', err);
+                                  }
+                                }
+                              }
+                            };
+                            playVideo();
+                          }
+                        }}
+                        autoPlay
+                        playsInline
+                        muted={participant.isLocal}
+                        className="w-full h-full object-cover"
+                        onLoadedMetadata={(e) => {
+                          // Ensure video plays when metadata is loaded
+                          const video = e.target as HTMLVideoElement;
+                          if (video.paused) {
+                            video.play().catch(err => {
+                              if (err.name !== 'AbortError') {
+                                console.error('Error playing video:', err);
+                              }
+                            });
+                          }
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-sm">
+                        <span className="bg-black/50 px-2 py-1 rounded">
+                          {participant.isLocal ? 'You' : participant.userId}
+                          {participant.streams.length > 1 && ` - Stream ${streamIndex + 1}`}
+                        </span>
+                        {selectedVideos.find(v => v.srcObject === stream) && (
+                          <span className="bg-white text-black px-2 py-1 rounded-full text-xs">
+                            Selected
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Settings Panel */}
+            <div className="bg-white/5 backdrop-blur-xl p-6 rounded-2xl shadow-2xl border border-white/10">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Room Settings */}
+                <div>
+                  <h2 className="text-xl font-bold mb-4 text-white/90">Room Settings</h2>
+                  <input
+                    type="text"
+                    placeholder="Enter new room ID"
+                    className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value)}
+                  />
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={() => joinRoom(roomId)}
+                      className="w-full py-3 rounded-lg bg-white text-black font-semibold hover:bg-zinc-200 transition-colors"
+                    >
+                      Change Room
+                    </button>
+                    <button
+                      onClick={toggleScreenShare}
+                      className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                        isScreenSharing 
+                          ? 'bg-zinc-800 text-white hover:bg-zinc-700' 
+                          : 'bg-white text-black hover:bg-zinc-200'
+                      }`}
+                    >
+                      {isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stream Settings */}
+                <div>
+                  <h2 className="text-xl font-bold mb-4 text-white/90">Stream Settings</h2>
+                  <input
+                    type="text"
+                    placeholder="RTMP URL"
+                    value={rtmpUrl}
+                    onChange={(e) => setRtmpUrl(e.target.value)}
+                    className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Stream Key"
+                    value={streamKey}
+                    onChange={(e) => setStreamKey(e.target.value)}
+                    className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
+                  />
                   <button
-                    onClick={() => joinRoom(roomId)}
-                    className="w-full py-3 rounded-lg bg-white text-black font-semibold hover:bg-zinc-200 transition-colors"
-                  >
-                    Change Room
-                  </button>
-                  <button
-                    onClick={toggleScreenShare}
-                    className={`w-full py-3 rounded-lg font-semibold transition-colors ${
-                      isScreenSharing 
+                    onClick={() => setIsStreaming(!isStreaming)}
+                    disabled={selectedVideos.length === 0}
+                    className={`w-full py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
+                      isStreaming 
                         ? 'bg-zinc-800 text-white hover:bg-zinc-700' 
                         : 'bg-white text-black hover:bg-zinc-200'
-                    }`}
+                    } ${selectedVideos.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
+                    {isStreaming ? (
+                      <>
+                        <VideoOff className="w-4 h-4" />
+                        Stop Streaming
+                      </>
+                    ) : (
+                      <>
+                        <Video className="w-4 h-4" />
+                        Start Streaming
+                      </>
+                    )}
                   </button>
                 </div>
-      </div>
-
-              {/* Streaming Controls */}
-              <div className="flex-1 border-l border-zinc-800 pl-4">
-                <h2 className="text-xl font-bold mb-4">Stream Settings</h2>
-        <input
-          type="text"
-                  placeholder="RTMP URL"
-                  value={rtmpUrl}
-                  onChange={(e) => setRtmpUrl(e.target.value)}
-                  className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
-                />
-                <input
-                  type="password"
-                  placeholder="Stream Key"
-                  value={streamKey}
-                  onChange={(e) => setStreamKey(e.target.value)}
-                  className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
-        />
-        <button
-                  onClick={() => setIsStreaming(!isStreaming)}
-                  disabled={selectedVideos.length === 0}
-                  className={`w-full py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
-                    isStreaming 
-                      ? 'bg-zinc-800 text-white hover:bg-zinc-700' 
-                      : 'bg-white text-black hover:bg-zinc-200'
-                  } ${selectedVideos.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {isStreaming ? (
-                    <>
-                      <VideoOff className="w-4 h-4" />
-                      Stop Streaming
-                    </>
-                  ) : (
-                    <>
-                      <Video className="w-4 h-4" />
-                      Start Streaming
-                    </>
-                  )}
-        </button>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Video Grid Section */}
-        <div className="bg-zinc-900 p-6 rounded-xl shadow-2xl mt-4">
-          <h2 className="text-xl font-bold mb-4">Available Streams</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-            {participants.map((participant) => 
-              participant.streams.map((stream, streamIndex) => (
-                <div
-                  key={`${participant.userId}-${streamIndex}`}
-                  className="relative aspect-video bg-black rounded-lg overflow-hidden group cursor-pointer transform hover:scale-[1.02] transition-transform"
-                  onClick={(e) => {
-                    const video = e.currentTarget.querySelector('video');
-                    if (video) handleVideoClick(video);
-                  }}
-                >
-                  <video
-                    ref={el => {
-                      if (el && el.srcObject !== stream) {
-                        el.srcObject = stream;
-                        // Add retry logic for play failures
-                        const playVideo = async () => {
-                          try {
-                            // Only play if video is paused
-                            if (el.paused) {
-                              await el.play();
-                            }
-                          } catch (err) {
-                            if (err instanceof Error) {
-                              // Handle abort errors by retrying
-                              if (err.name === 'AbortError') {
-                                console.log('Retrying video playback...');
-                                // Retry after a short delay
-                                setTimeout(playVideo, 100);
-                              } else {
-                                console.error('Video playback error:', err);
+          {/* Right Side Streams - Desktop and Tablet */}
+          <div className="hidden md:block w-full max-w-[35vw] bg-white/5 backdrop-blur-xl p-6 rounded-2xl shadow-2xl border border-white/10 max-h-[calc(100vh-8rem)] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4 text-white/90 sticky top-0 bg-zinc-900/50 backdrop-blur-xl py-2">
+              Available Streams
+            </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {participants.map((participant) => 
+                participant.streams.map((stream, streamIndex) => (
+                  <div
+                    key={`${participant.userId}-${streamIndex}`}
+                    className="relative aspect-video bg-black rounded-lg overflow-hidden group cursor-pointer transform hover:scale-[1.02] transition-transform max-w-[35vw]"
+                    onClick={(e) => {
+                      const video = e.currentTarget.querySelector('video');
+                      if (video) handleVideoClick(video);
+                    }}
+                  >
+                    <video
+                      ref={el => {
+                        if (el && el.srcObject !== stream) {
+                          el.srcObject = stream;
+                          // Add retry logic for play failures
+                          const playVideo = async () => {
+                            try {
+                              // Only play if video is paused
+                              if (el.paused) {
+                                await el.play();
+                              }
+                            } catch (err) {
+                              if (err instanceof Error) {
+                                // Handle abort errors by retrying
+                                if (err.name === 'AbortError') {
+                                  console.log('Retrying video playback...');
+                                  // Retry after a short delay
+                                  setTimeout(playVideo, 100);
+                                } else {
+                                  console.error('Video playback error:', err);
+                                }
                               }
                             }
-                          }
-                        };
-                        playVideo();
-                      }
-                    }}
-                    autoPlay
-                    playsInline
-                    muted={participant.isLocal}
-                    className="w-full h-full object-cover"
-                    onLoadedMetadata={(e) => {
-                      // Ensure video plays when metadata is loaded
-                      const video = e.target as HTMLVideoElement;
-                      if (video.paused) {
-                        video.play().catch(err => {
-                          if (err.name !== 'AbortError') {
-                            console.error('Error playing video:', err);
-                          }
-                        });
-                      }
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-sm">
-                    <span className="bg-black/50 px-2 py-1 rounded">
-                      {participant.isLocal ? 'You' : participant.userId}
-                      {participant.streams.length > 1 && ` - Stream ${streamIndex + 1}`}
-                    </span>
-                    {selectedVideos.find(v => v.srcObject === stream) && (
-                      <span className="bg-white text-black px-2 py-1 rounded-full text-xs">
-                        Selected
+                          };
+                          playVideo();
+                        }
+                      }}
+                      autoPlay
+                      playsInline
+                      muted={participant.isLocal}
+                      className="w-full h-full object-cover"
+                      onLoadedMetadata={(e) => {
+                        // Ensure video plays when metadata is loaded
+                        const video = e.target as HTMLVideoElement;
+                        if (video.paused) {
+                          video.play().catch(err => {
+                            if (err.name !== 'AbortError') {
+                              console.error('Error playing video:', err);
+                            }
+                          });
+                        }
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-sm">
+                      <span className="bg-black/50 px-2 py-1 rounded">
+                        {participant.isLocal ? 'You' : participant.userId}
+                        {participant.streams.length > 1 && ` - Stream ${streamIndex + 1}`}
                       </span>
-                    )}
+                      {selectedVideos.find(v => v.srcObject === stream) && (
+                        <span className="bg-white text-black px-2 py-1 rounded-full text-xs">
+                          Selected
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
