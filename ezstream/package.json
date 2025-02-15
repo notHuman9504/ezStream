@@ -15,8 +15,8 @@
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.0",
-    "clsx": "^2.0.0",
-    "framer-motion": "^10.16.16",
+    "clsx": "^2.1.1",
+    "framer-motion": "^10.18.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.294.0",
     "mongoose": "^8.0.3",
@@ -27,7 +27,7 @@
     "react-player": "^2.13.0",
     "react-redux": "^9.0.4",
     "socket.io-client": "^4.7.2",
-    "tailwind-merge": "^2.1.0",
+    "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {

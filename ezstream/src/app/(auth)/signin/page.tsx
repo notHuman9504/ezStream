@@ -51,7 +51,7 @@ export default function SignIn() {
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] w-full flex">
+    <div className="min-h-screen w-full flex">
       {/* Left side - Black */}
       <div className="hidden lg:flex w-1/2 bg-black items-center justify-center p-6">
         <div className="max-w-lg">

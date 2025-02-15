@@ -42,7 +42,7 @@ export default function SignUp() {
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] w-full flex">
+    <div className="min-h-screen w-full flex">
       {/* Left side - White */}
       <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-6">
         <div className="w-full max-w-md space-y-6">

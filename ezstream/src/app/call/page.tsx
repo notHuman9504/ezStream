@@ -474,7 +474,7 @@ export default function CallPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-black text-white p-8">
+    <div className="min-h-screen bg-black text-white p-8">
       {/* Main Container */}
       <div className="max-w-[2000px] mx-auto">
         {/* Top Section - Canvas and Room Join */}

@@ -1,0 +1,161 @@
+%-------------------------
+% ATS-Friendly Resume in Latex
+% Author : AlgoUniversity (Modified)
+%------------------------
+
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage{multicol}
+\input{glyphtounicode}
+
+\pagestyle{fancy}
+\fancyhf{} % clear all header and footer fields
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.6in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1.19in}
+\addtolength{\topmargin}{-.7in}
+\addtolength{\textheight}{1.4in}
+
+\urlstyle{same}
+
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+% Sections formatting
+\titleformat{\section}{
+  \vspace{-4pt}\scshape\raggedright\large\bfseries
+}{}{0em}{}[\titlerule \vspace{-5pt}]
+
+% Ensure that generated pdf is machine readable/ATS parsable
+\pdfgentounicode=1
+
+%-------------------------
+% Custom commands
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    {#1 \vspace{-2pt}}
+  }
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-2pt}\item
+    \begin{tabular*}{1.0\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & \textbf{\small #2} \\ 
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{1.001\textwidth}{l@{\extracolsep{\fill}}r}
+      \small#1 & \textbf{\small #2}\\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\renewcommand\labelitemi{$\vcenter{\hbox{\tiny$\bullet$}}$}
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+\begin{center}
+    {\Huge \scshape Jaimin Khunt} \\ \vspace{10pt}
+    \small 
+    \faPhone\ +91 6359594142 ~ 
+    \href{mailto:khuntjaimin1@gmail.com}{\faEnvelope\  khuntjaimin1@gmail.com} ~
+    \href{https://www.linkedin.com/in/jaimin-khunt-a77aa8269/}{\faLinkedin\ LinkedIn} ~
+    \href{https://github.com/notHuman9504}{\faGithub\ GitHub} ~
+    \href{https://myportfolio-three-pi.vercel.app/}{\faGlobe\ Portfolio}
+    \vspace{-8pt}
+\end{center}
+
+%-----------EDUCATION-----------
+\section{Education}
+\resumeSubHeadingListStart
+\resumeSubheading
+{Charotar University of Science and Technology}{Gujarat, India}
+{Bachelor of Technology in Information Technology}{August 2022 - May 2026}
+\resumeItemListStart
+\resumeItem{Relevant Coursework: Data Structures, Algorithms, Web Development, Database Management, Software Engineering}
+\resumeItem{CGPA: 9.16}
+\resumeItemListEnd
+\resumeSubHeadingListEnd
+
+%-----------SKILLS-----------
+\section{Skills}
+\begin{itemize}[leftmargin=0.15in, label={}]
+    \small{\item{
+        \textbf{Programming Languages}{: C++, Python, Java, JavaScript, TypeScript} \\
+        \textbf{Backend Development}{: Node.js, Express.js, Zod, Next Auth, JWT, RESTful APIs} \\
+        \textbf{Frontend Development}{: Next.js, React, TailwindCSS, HTML5, CSS3, Bootstrap, Material-UI, Recoil} \\
+        \textbf{Database Management}{: MongoDB, MySQL} \\
+        \textbf{Developer Tools}{: Git, GitHub, VS Code, Postman, Cursor} \\
+        \textbf{Other}{: Data Structures, Algorithms, Object-Oriented Programming}
+    }}
+\end{itemize}
+
+%-----------WORK EXPERIENCE-----------
+\section{Professional Experience}
+\resumeSubHeadingListStart
+\resumeSubheading
+{GeeksforGeeks \href{https://media.geeksforgeeks.org/certificates/1739442648/4701bb61045374f0ef5039b242cd9881.pdf}{(\underline{Certificate})}}{Remote}
+{Problem Setter and Technical Interviewer}{July 2024 - November 2024}
+\resumeItemListStart
+\resumeItem{Developed and curated 100+ high-quality coding problems, enhancing the platform's problem repository.}
+\resumeItem{Conducted 10+ technical interviews, assessing candidates' problem-solving skills and coding proficiency.}
+\resumeItem{Implemented a standardized difficulty rating system, improving user experience and learning progression.}
+\resumeItem{Collaborated with a team of 10 to maintain content quality standards, resulting in a increase in user engagement.}
+\resumeItem{Authored comprehensive problem documentation and optimized solutions, reducing user query resolution time.}
+\resumeItemListEnd
+\resumeSubHeadingListEnd
+
+%-----------ACHIEVEMENTS-----------
+\section{Achievements}
+\resumeSubHeadingListStart
+
+\item
+\textbf{LeetCode} \hfill \href{https://leetcode.com/u/nothuman9504/}{\underline{Profile Link}}
+\resumeItemListStart
+\resumeItem{Solved 350+ Data Structures and Algorithms problems, ranking in the top 5\% of users.}
+\resumeItem{Achieved max rating of 1682, showcasing strong problem-solving capabilities.}
+\resumeItemListEnd
+
+\item
+\textbf{CodeChef} \hfill \href{https://www.codechef.com/users/nothuman9504}{\underline{Profile Link}}
+\resumeItemListStart
+\resumeItem{Achieved 5-star with rating of 2019, demonstrating advanced problem-solving skills.}
+\resumeItem{Secured Global Rank 5 out of 34,876 participants in CodeChef Starters 128 Div 2 and Global Rank 69 out of 28,434 participants in Starters 130 Div 2.}
+\resumeItemListEnd
+
+\item
+\textbf{Codeforces} \hfill \href{https://codeforces.com/profile/notHuman9504}{\underline{Profile Link}}
+\resumeItemListStart
+\resumeItem{Ranked as Expert (rating 1623) on Codeforces, showcasing consistent high performance.}
+\resumeItem{Secured Global Rank 699 out of 32,811 participants in Round 935 Div 3 and Global Rank 1217 out of 25,017 participants in Round 939 Div 2.}
+\resumeItemListEnd
+
+\resumeSubHeadingListEnd
