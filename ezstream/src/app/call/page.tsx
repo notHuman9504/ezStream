@@ -38,6 +38,39 @@ export default function CallPage() {
   // Add this state at the top with other states
   const [maxSelectedVideos, setMaxSelectedVideos] = useState(1);
 
+  // Add these state variables at the top
+  const [canvasWidth, setCanvasWidth] = useState(640);
+  const [canvasHeight, setCanvasHeight] = useState(360);
+
+  // Add this useEffect for handling resize
+  useEffect(() => {
+    const handleResize = () => {
+      // First calculate based on 55vh height limit
+      const maxHeight = window.innerHeight * 0.50; // 55vh
+      const width = maxHeight * (16/9); // Calculate width based on height to maintain 16:9
+
+      // If width is too wide for screen, recalculate based on width
+      if (width > window.innerWidth - 32) {
+        const adjustedWidth = window.innerWidth - 32;
+        const adjustedHeight = adjustedWidth * (9/16);
+        setCanvasWidth(adjustedWidth);
+        setCanvasHeight(adjustedHeight);
+      } else {
+        setCanvasWidth(width);
+        setCanvasHeight(maxHeight);
+      }
+    };
+
+    // Set initial size
+    handleResize();
+
+    // Add resize listener
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Add function to generate random room ID
   const generateRoomId = () => {
     return Math.random().toString(36).substring(2, 8);
@@ -483,31 +516,31 @@ export default function CallPage() {
     <div className="min-h-screen bg-black text-white pt-16 px-8 pb-8 md:pt-20">
       <div className="max-w-[2000px] mx-auto">
         {/* Top Section - Canvas and Layout */}
-        <div className="flex flex-col lg:flex-row gap-8 mb-8">
+        <div className="flex flex-col lg:flex-row gap-4 mb-4">
           {/* Left Section - Canvas and Layout Bar */}
           <div className="flex-1 flex flex-col gap-4">
             {/* Canvas Container */}
-            <div className="relative h-[400px] bg-zinc-900 rounded-xl overflow-hidden shadow-2xl flex items-center justify-center">
-            <VideoCanvas 
-              videoRefs={selectedVideos} 
-              isStreaming={isStreaming}
-              streamingSocket={streamingSocketRef.current}
-              rtmpUrl={rtmpUrl}
-              streamKey={streamKey}
-              width={640}
-              height={360}
-              fps={45}
-            />
+            <div className="relative w-full aspect-video max-h-[55vh] bg-zinc-900 rounded-xl overflow-hidden shadow-2xl flex items-center justify-center">
+              <VideoCanvas 
+                videoRefs={selectedVideos} 
+                isStreaming={isStreaming}
+                streamingSocket={streamingSocketRef.current}
+                rtmpUrl={rtmpUrl}
+                streamKey={streamKey}
+                width={canvasWidth}
+                height={canvasHeight}
+                fps={45}
+              />
               <div className="absolute top-4 right-4 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
                 {selectedVideos.length}/{maxSelectedVideos}
               </div>
             </div>
 
-            {/* Layout Bar - Now inside canvas parent div */}
-            <div className="bg-zinc-900 p-4 rounded-xl shadow-2xl">
-              <div className="flex items-center gap-4">
-                <span className="text-white/80">Layout:</span>
-                <div className="flex gap-2">
+            {/* Layout Bar */}
+            <div className="bg-zinc-900 p-3 md:p-4 rounded-xl shadow-2xl">
+              <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                <span className="text-white/80 text-sm md:text-base">Layout:</span>
+                <div className="flex flex-wrap gap-2 md:gap-3">
                   {[1, 2, 3, 4, 5, 6].map((num) => (
                     <button
                       key={num}
@@ -515,7 +548,7 @@ export default function CallPage() {
                         setMaxSelectedVideos(num);
                         setSelectedVideos(prev => prev.slice(0, num));
                       }}
-                      className={`w-12 h-12 rounded-lg flex items-center justify-center font-bold transition-colors cursor-pointer
+                      className={`w-10 h-10 md:w-12 md:h-12 rounded-lg flex items-center justify-center font-bold transition-colors cursor-pointer text-sm md:text-base
                         ${maxSelectedVideos === num 
                           ? 'bg-white text-black hover:bg-white/90' 
                           : 'bg-zinc-800 text-white hover:bg-zinc-700'
@@ -609,7 +642,7 @@ export default function CallPage() {
         </div>
 
         {/* Video Grid Section */}
-        <div className="bg-zinc-900 p-6 rounded-xl shadow-2xl">
+        <div className="bg-zinc-900 p-2 px-6 rounded-xl shadow-2xl">
           <h2 className="text-xl font-bold mb-4">Available Streams</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
             {participants.map((participant) => 
@@ -678,10 +711,10 @@ export default function CallPage() {
                     )}
                   </div>
                 </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
 
         {/* Room and Stream Settings - Only visible on small screens */}
         <div className="lg:hidden mt-8 bg-zinc-900 p-4 rounded-xl shadow-2xl">
