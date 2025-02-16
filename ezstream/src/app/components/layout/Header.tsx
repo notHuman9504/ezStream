@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Home, Phone, LogIn, LogOut, User } from 'lucide-react'
+import { Home, Phone, LogIn, LogOut, User, Camera } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { usePathname } from 'next/navigation'
 import { useSelector } from 'react-redux'
@@ -81,10 +81,27 @@ export default function Header() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex justify-center py-4">
-      <div className="flex flex-col sm:flex-row items-center gap-4 w-fit">
+    <header className="fixed top-0 left-0 right-0 z-50 flex justify-center py-4 pointer-events-none">
+      <div className="flex flex-col sm:flex-row items-center gap-4 w-fit pointer-events-auto">
         {/* Navigation Items */}
-        <div className="w-full flex items-center gap-3 bg-black/50 border border-zinc-800 backdrop-blur-lg py-1 px-1 rounded-full shadow-lg">
+        <div className="w-full flex items-center gap-3 bg-black/50 border border-zinc-800 backdrop-blur-lg py-1 px-1 rounded-full shadow-lg pointer-events-auto">
+          {/* Add ezStream logo */}
+          <div className="flex items-center gap-2 px-6 py-2 text-white group">
+            <Camera 
+              size={18} 
+              strokeWidth={2.5} 
+              className="text-white drop-shadow-[0_0_3px_rgba(255,255,255,0.5)]" 
+            />
+            <span className="hidden md:inline font-bold text-sm tracking-wide drop-shadow-[0_0_3px_rgba(255,255,255,0.5)]">
+              ezStream
+            </span>
+            {/* Glow effect */}
+            <div className="absolute inset-0 bg-white/5 rounded-full blur-md" />
+          </div>
+
+          {/* Divider */}
+          <div className="h-6 w-px bg-zinc-800/50" />
+
           {navItems.map((item) => {
             const Icon = item.icon
             const isActive = activeTab === item.name
@@ -157,7 +174,7 @@ export default function Header() {
 
         {/* Email Bubble */}
         {userEmail && (
-          <div className="w-full sm:w-auto flex items-center bg-black/50 border border-zinc-800 backdrop-blur-lg py-1 px-1 rounded-full shadow-lg">
+          <div className="w-full sm:w-auto flex items-center bg-black/50 border border-zinc-800 backdrop-blur-lg py-1 px-1 rounded-full shadow-lg pointer-events-auto">
             <div
               className={cn(
                 "relative text-sm font-semibold px-6 py-2 rounded-full w-full text-center",

@@ -521,16 +521,16 @@ export default function CallPage() {
           <div className="flex-1 flex flex-col gap-4">
             {/* Canvas Container */}
             <div className="relative w-full aspect-video max-h-[55vh] bg-zinc-900 rounded-xl overflow-hidden shadow-2xl flex items-center justify-center">
-              <VideoCanvas 
-                videoRefs={selectedVideos} 
-                isStreaming={isStreaming}
-                streamingSocket={streamingSocketRef.current}
-                rtmpUrl={rtmpUrl}
-                streamKey={streamKey}
+            <VideoCanvas 
+              videoRefs={selectedVideos} 
+              isStreaming={isStreaming}
+              streamingSocket={streamingSocketRef.current}
+              rtmpUrl={rtmpUrl}
+              streamKey={streamKey}
                 width={canvasWidth}
                 height={canvasHeight}
-                fps={45}
-              />
+              fps={45}
+            />
               <div className="absolute top-4 right-4 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
                 {selectedVideos.length}/{maxSelectedVideos}
               </div>
