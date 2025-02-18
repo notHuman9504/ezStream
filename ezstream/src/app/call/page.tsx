@@ -126,87 +126,110 @@ export default function CallPage() {
   }, []);
 
   // Join room and setup local stream
-  const joinRoom = async (roomId: string) => {
+  const joinRoom = async (roomToJoin: string) => {
     try {
-      if (!localStreamRef.current) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 }
-          },
-          audio: true
-        });
-        localStreamRef.current = stream;
-        
-        // Update participants with local stream
-        setParticipants(prev => {
-          const existing = prev.find(p => p.isLocal);
-          if (existing) {
-            return prev.map(p => p.isLocal ? { ...p, streams: [stream] } : p);
-          }
-          return [...prev, { userId: 'local', streams: [stream], isLocal: true }];
-        });
-      }
-
-      socketRef.current?.emit('join-room', roomId);
-      setActiveRoom(roomId);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      localStreamRef.current = stream;
+      
+      setParticipants([{
+        userId: 'local',
+        streams: [stream],
+        isLocal: true
+      }]);
+      
+      setActiveRoom(roomToJoin);
+      socketRef.current?.emit('join-room', roomToJoin);
       setJoined(true);
-    } catch (error) {
-      console.error('Error joining room:', error);
-      // Retry with audio only if video fails
-      if (error instanceof Error && error.name === 'NotAllowedError') {
-        try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          localStreamRef.current = audioStream;
-          socketRef.current?.emit('join-room', roomId);
-          setActiveRoom(roomId);
-          setJoined(true);
-        } catch (audioError) {
-          console.error('Audio fallback failed:', audioError);
-        }
-      }
+    } catch (err) {
+      console.error('Error accessing media devices:', err);
     }
   };
 
   // WebRTC peer connection setup
-  const createPeer = (userId: string) => {
+  const createPeer = (userId: string): RTCPeerConnection => {
     const peer = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-      ],
-      iceCandidatePoolSize: 10
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    });
+  
+    // Add this to process queued ICE candidates
+    const queuedCandidates = iceCandidatesQueue.current[userId];
+    if (queuedCandidates) {
+      queuedCandidates.forEach(candidate => {
+        peer.addIceCandidate(new RTCIceCandidate(candidate));
+      });
+      delete iceCandidatesQueue.current[userId];
+    }
+  
+    // Modify the ice candidate handler to handle queuing properly
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        if (peer.remoteDescription) {
+          // Send immediately if connection is established
+          socketRef.current?.emit('ice-candidate', {
+            candidate: event.candidate,
+            to: userId,
+          });
+        } else {
+          // Queue candidates until remote description is set
+          iceCandidatesQueue.current[userId] = [
+            ...(iceCandidatesQueue.current[userId] || []),
+            event.candidate
+          ];
+        }
+      }
+    };
+
+    // Update the track addition logic in createPeer
+    const addTracksToPeer = (peer: RTCPeerConnection, stream: MediaStream | null) => {
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          if (!peer.getSenders().some(s => s.track === track)) {
+            peer.addTrack(track, stream);
+          }
+        });
+      }
+    };
+
+    // Replace existing track addition code with:
+    addTracksToPeer(peer, localStreamRef.current);
+    addTracksToPeer(peer, screenStreamRef.current);
+
+    // Add this to handle track removal properly
+    const removeTrackFromPeer = (peer: RTCPeerConnection, track: MediaStreamTrack) => {
+      const sender = peer.getSenders().find(s => s.track === track);
+      if (sender) {
+        peer.removeTrack(sender);
+      }
+    };
+
+    // Update the screen share stop logic
+    screenStreamRef.current?.getTracks().forEach(track => {
+      track.stop();
+      Object.values(peersRef.current).forEach(peer => {
+        removeTrackFromPeer(peer, track);
+      });
     });
 
-    // Add connection state monitoring
-    peer.onconnectionstatechange = () => {
-      if (peer.connectionState === 'failed') {
-        console.log('Connection failed, attempting recovery...');
-        // Attempt to recreate the peer connection
-        peersRef.current[userId]?.close();
-        delete peersRef.current[userId];
-        const newPeer = createPeer(userId);
-        peersRef.current[userId] = newPeer;
+    // Add renegotiation handler to peer connection
+    peer.onnegotiationneeded = async () => {
+      try {
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socketRef.current?.emit('offer', { offer, to: userId });
+      } catch (err) {
+        console.error('Negotiation failed:', err);
       }
     };
 
-    // Add ICE connection state monitoring
-    peer.oniceconnectionstatechange = () => {
-      if (peer.iceConnectionState === 'failed') {
-        peer.restartIce();
+    peer.ontrack = (event) => {
+      const stream = event.streams[0];
+      if (stream) {
+        handleTrack(userId, stream);
       }
     };
-
-    // Ensure local stream is added to peer
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => {
-        if (localStreamRef.current) {
-          peer.addTrack(track, localStreamRef.current);
-        }
-      });
-    }
 
     return peer;
   };
@@ -530,33 +553,6 @@ export default function CallPage() {
     });
   };
 
-  // Add cleanup useEffect
-  useEffect(() => {
-    return () => {
-      // Clean up peer connections
-      Object.values(peersRef.current).forEach(peer => {
-        peer.close();
-      });
-      peersRef.current = {};
-
-      // Clean up local stream
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => {
-          track.stop();
-        });
-        localStreamRef.current = null;
-      }
-
-      // Clean up screen share
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach(track => {
-          track.stop();
-        });
-        screenStreamRef.current = null;
-      }
-    };
-  }, []);
-
   return (
     <div className="min-h-screen bg-black text-white pt-16 px-8 pb-8 md:pt-20">
       <div className="max-w-[2000px] mx-auto">
@@ -704,15 +700,23 @@ export default function CallPage() {
                     ref={el => {
                       if (el && el.srcObject !== stream) {
                         el.srcObject = stream;
+                        // Add retry logic for play failures
                         const playVideo = async () => {
                           try {
+                            // Only play if video is paused
                             if (el.paused) {
                               await el.play();
                             }
                           } catch (err) {
-                            console.error('Playback error:', err);
-                            if (err instanceof Error && err.name !== 'NotAllowedError') {
-                              setTimeout(playVideo, 500);
+                            if (err instanceof Error) {
+                              // Handle abort errors by retrying
+                              if (err.name === 'AbortError') {
+                                console.log('Retrying video playback...');
+                                // Retry after a short delay
+                                setTimeout(playVideo, 100);
+                              } else {
+                                console.error('Video playback error:', err);
+                              }
                             }
                           }
                         };
@@ -724,23 +728,14 @@ export default function CallPage() {
                     muted={participant.isLocal}
                     className="w-full h-full object-cover"
                     onLoadedMetadata={(e) => {
+                      // Ensure video plays when metadata is loaded
                       const video = e.target as HTMLVideoElement;
                       if (video.paused) {
                         video.play().catch(err => {
-                          if (err.name !== 'AbortError' && err.name !== 'NotAllowedError') {
+                          if (err.name !== 'AbortError') {
                             console.error('Error playing video:', err);
                           }
                         });
-                      }
-                    }}
-                    onError={(e) => {
-                      const target = e.target as HTMLVideoElement;
-                      console.error('Video error:', target.error);
-                      if (target.error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-                        target.srcObject = null;
-                        setTimeout(() => {
-                          target.srcObject = stream;
-                        }, 1000);
                       }
                     }}
                   />
