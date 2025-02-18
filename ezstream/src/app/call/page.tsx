@@ -151,86 +151,66 @@ export default function CallPage() {
   // WebRTC peer connection setup
   const createPeer = (userId: string): RTCPeerConnection => {
     const peer = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+      ],
+      iceCandidatePoolSize: 10
     });
   
-    // Add this to process queued ICE candidates
-    const queuedCandidates = iceCandidatesQueue.current[userId];
-    if (queuedCandidates) {
-      queuedCandidates.forEach(candidate => {
-        peer.addIceCandidate(new RTCIceCandidate(candidate));
+    // Add all local tracks to the peer connection immediately
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => {
+        peer.addTrack(track, localStreamRef.current!);
       });
-      delete iceCandidatesQueue.current[userId];
     }
   
-    // Modify the ice candidate handler to handle queuing properly
+    // Handle tracks being added by the remote peer
+    peer.ontrack = (event) => {
+      console.log('Received remote track:', event.track.kind);
+      const stream = event.streams[0];
+      if (!stream) {
+        console.warn('No stream received with track');
+        return;
+      }
+  
+      setParticipants(prev => {
+        const existingParticipant = prev.find(p => p.userId === userId);
+        if (existingParticipant) {
+          // Check if we already have this stream
+          if (!existingParticipant.streams.some(s => s.id === stream.id)) {
+            return prev.map(p => 
+              p.userId === userId 
+                ? { ...p, streams: [...p.streams, stream] }
+                : p
+            );
+          }
+          return prev;
+        }
+        return [...prev, { userId, streams: [stream], isLocal: false }];
+      });
+    };
+  
+    // Improved ICE candidate handling
     peer.onicecandidate = (event) => {
       if (event.candidate) {
-        if (peer.remoteDescription) {
-          // Send immediately if connection is established
-          socketRef.current?.emit('ice-candidate', {
-            candidate: event.candidate,
-            to: userId,
-          });
-        } else {
-          // Queue candidates until remote description is set
-          iceCandidatesQueue.current[userId] = [
-            ...(iceCandidatesQueue.current[userId] || []),
-            event.candidate
-          ];
-        }
-      }
-    };
-
-    // Update the track addition logic in createPeer
-    const addTracksToPeer = (peer: RTCPeerConnection, stream: MediaStream | null) => {
-      if (stream) {
-        stream.getTracks().forEach(track => {
-          if (!peer.getSenders().some(s => s.track === track)) {
-            peer.addTrack(track, stream);
-          }
+        socketRef.current?.emit('ice-candidate', {
+          candidate: event.candidate,
+          to: userId
         });
       }
     };
-
-    // Replace existing track addition code with:
-    addTracksToPeer(peer, localStreamRef.current);
-    addTracksToPeer(peer, screenStreamRef.current);
-
-    // Add this to handle track removal properly
-    const removeTrackFromPeer = (peer: RTCPeerConnection, track: MediaStreamTrack) => {
-      const sender = peer.getSenders().find(s => s.track === track);
-      if (sender) {
-        peer.removeTrack(sender);
+  
+    // Monitor connection state
+    peer.onconnectionstatechange = () => {
+      console.log(`Connection state with ${userId}:`, peer.connectionState);
+      if (peer.connectionState === 'failed') {
+        // Attempt to restart ICE
+        peer.restartIce();
       }
     };
-
-    // Update the screen share stop logic
-    screenStreamRef.current?.getTracks().forEach(track => {
-      track.stop();
-      Object.values(peersRef.current).forEach(peer => {
-        removeTrackFromPeer(peer, track);
-      });
-    });
-
-    // Add renegotiation handler to peer connection
-    peer.onnegotiationneeded = async () => {
-      try {
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        socketRef.current?.emit('offer', { offer, to: userId });
-      } catch (err) {
-        console.error('Negotiation failed:', err);
-      }
-    };
-
-    peer.ontrack = (event) => {
-      const stream = event.streams[0];
-      if (stream) {
-        handleTrack(userId, stream);
-      }
-    };
-
+  
     return peer;
   };
 
@@ -295,47 +275,31 @@ export default function CallPage() {
     try {
       let peer = peersRef.current[from];
       
-      // Check if we need to create or reset the peer connection
-      if (peer?.signalingState !== 'stable') {
-        if (peer) {
-          console.warn('Closing existing peer connection in state:', peer.signalingState);
-          peer.close();
-        }
+      if (!peer || peer.connectionState === 'failed') {
         peer = createPeer(from);
         peersRef.current[from] = peer;
       }
 
-      // Set remote description
+      // Handle any queued ICE candidates
+      const queuedCandidates = iceCandidatesQueue.current[from] || [];
+      
       await peer.setRemoteDescription(new RTCSessionDescription(offer));
       
-      // Create and set local description
+      // Add queued candidates after remote description is set
+      for (const candidate of queuedCandidates) {
+        await peer.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+      iceCandidatesQueue.current[from] = [];
+
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
       
-      // Send answer
       socketRef.current?.emit('answer', {
-        answer: peer.localDescription,
+        answer,
         to: from
       });
-
-      // Process any queued candidates
-      const queuedCandidates = iceCandidatesQueue.current[from] || [];
-      for (const candidate of queuedCandidates) {
-        try {
-          await peer.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.error('Error adding queued candidate:', err);
-        }
-      }
-      delete iceCandidatesQueue.current[from];
-
     } catch (err) {
       console.error('Error handling offer:', err);
-      // Clean up failed peer connection
-      if (peersRef.current[from]) {
-        peersRef.current[from].close();
-        delete peersRef.current[from];
-      }
     }
   };
 
@@ -387,16 +351,14 @@ export default function CallPage() {
   };
 
   const handleIceCandidate = async ({ candidate, from }: { candidate: RTCIceCandidateInit; from: string }) => {
-    const peer = peersRef.current[from];
-    
     try {
-      if (peer?.remoteDescription && peer.signalingState !== 'closed') {
+      const peer = peersRef.current[from];
+      
+      if (peer?.remoteDescription) {
         await peer.addIceCandidate(new RTCIceCandidate(candidate));
       } else {
-        // Queue the candidate if we're not ready
-        if (!iceCandidatesQueue.current[from]) {
-          iceCandidatesQueue.current[from] = [];
-        }
+        // Queue the candidate if remote description isn't set yet
+        iceCandidatesQueue.current[from] = iceCandidatesQueue.current[from] || [];
         iceCandidatesQueue.current[from].push(candidate);
       }
     } catch (err) {
