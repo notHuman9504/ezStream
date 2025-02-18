@@ -150,58 +150,36 @@ export default function CallPage() {
 
   // WebRTC peer connection setup
   const createPeer = (userId: string): RTCPeerConnection => {
+    console.log('Creating peer for:', userId);
+    
     const peer = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
       ],
-      iceCandidatePoolSize: 10
+      iceTransportPolicy: 'all',
+      bundlePolicy: 'max-bundle',
     });
-  
-    // Add all local tracks to the peer connection immediately
+
+    // Add all tracks from local stream
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => {
+        console.log('Adding track to peer:', track.kind);
         peer.addTrack(track, localStreamRef.current!);
       });
     }
-  
-    // Handle tracks being added by the remote peer
-    peer.ontrack = (event) => {
-      console.log('Received remote track:', event.track.kind);
-      const stream = event.streams[0];
-      if (!stream) {
-        console.warn('No stream received with track');
-        return;
-      }
-  
-      setParticipants(prev => {
-        const existingParticipant = prev.find(p => p.userId === userId);
-        if (existingParticipant) {
-          // Check if we already have this stream
-          if (!existingParticipant.streams.some(s => s.id === stream.id)) {
-            return prev.map(p => 
-              p.userId === userId 
-                ? { ...p, streams: [...p.streams, stream] }
-                : p
-            );
-          }
-          return prev;
-        }
-        return [...prev, { userId, streams: [stream], isLocal: false }];
-      });
-    };
-  
-    // Improved ICE candidate handling
+
+    // Handle ICE candidates
     peer.onicecandidate = (event) => {
       if (event.candidate) {
+        console.log('Sending ICE candidate to:', userId);
         socketRef.current?.emit('ice-candidate', {
           candidate: event.candidate,
           to: userId
         });
       }
     };
-  
+
     // Monitor connection state
     peer.onconnectionstatechange = () => {
       console.log(`Connection state with ${userId}:`, peer.connectionState);
@@ -210,7 +188,34 @@ export default function CallPage() {
         peer.restartIce();
       }
     };
-  
+
+    // Handle incoming tracks
+    peer.ontrack = (event) => {
+      console.log('Received track from:', userId, event.track.kind);
+      const [remoteStream] = event.streams;
+      
+      if (!remoteStream) {
+        console.warn('No stream received with track');
+        return;
+      }
+
+      setParticipants(prev => {
+        const existingParticipant = prev.find(p => p.userId === userId);
+        if (existingParticipant) {
+          // Check if we already have this stream
+          if (!existingParticipant.streams.some(s => s.id === remoteStream.id)) {
+            return prev.map(p => 
+              p.userId === userId 
+                ? { ...p, streams: [...p.streams, remoteStream] }
+                : p
+            );
+          }
+          return prev;
+        }
+        return [...prev, { userId, streams: [remoteStream], isLocal: false }];
+      });
+    };
+
     return peer;
   };
 
