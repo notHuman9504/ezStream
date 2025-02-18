@@ -11,7 +11,7 @@ const CTASection = () => {
   });
 
   return (
-    <section className="w-full py-20 bg-white">
+    <section className="w-full min-h-screen flex items-center justify-center bg-white">
       <motion.div
         ref={ref}
         initial={{ opacity: 0, y: 50 }}

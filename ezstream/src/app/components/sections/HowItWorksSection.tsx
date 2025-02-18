@@ -27,7 +27,7 @@ const HowItWorksSection = () => {
   });
 
   return (
-    <section className="w-full py-20 bg-black">
+    <section className="w-full min-h-screen flex items-center justify-center bg-black">
       <motion.div
         ref={ref}
         initial={{ opacity: 0, y: 50 }}

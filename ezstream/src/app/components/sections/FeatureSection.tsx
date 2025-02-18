@@ -101,7 +101,7 @@ const FeatureSection = () => {
   };
 
   return (
-    <section className="w-full py-20 bg-white overflow-hidden snap-section">
+    <section className="w-full min-h-screen flex items-center justify-center bg-white overflow-hidden snap-section">
       <motion.div
         ref={ref}
         initial="hidden"

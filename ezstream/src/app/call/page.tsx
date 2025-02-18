@@ -149,44 +149,32 @@ export default function CallPage() {
   };
 
   // WebRTC peer connection setup
-  const createPeer = (userId: string): RTCPeerConnection => {
+  const createPeer = (userId: string) => {
     const peer = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     });
-  
-    // Add camera tracks if not already added
-    if (localStreamRef.current) {
-      const existingTracks = peer.getSenders().map(s => s.track);
-      localStreamRef.current.getTracks().forEach(track => {
-        if (!existingTracks.includes(track)) {
-          peer.addTrack(track, localStreamRef.current!);
-        }
-      });
-    }
-  
-    // Add screen tracks if not already added
-    if (screenStreamRef.current) {
-      const existingTracks = peer.getSenders().map(s => s.track);
-      screenStreamRef.current.getTracks().forEach(track => {
-        if (!existingTracks.includes(track)) {
-          peer.addTrack(track, screenStreamRef.current!);
-        }
-      });
-    }
 
-    peer.onicecandidate = (event) => {
-      if (event.candidate) {
-        socketRef.current?.emit('ice-candidate', {
-          candidate: event.candidate,
-          to: userId,
-        });
-      }
-    };
+    // Add transceiver for video upfront
+    peer.addTransceiver('video', {
+      direction: 'recvonly',
+      streams: [] // Start with empty stream
+    });
 
+    // Handle track additions
     peer.ontrack = (event) => {
-      const stream = event.streams[0];
-      if (stream) {
-        handleTrack(userId, stream);
+      if (event.track.kind === 'video') {
+        const newStream = new MediaStream([event.track]);
+        setParticipants(prev => {
+          const existing = prev.find(p => p.userId === userId);
+          if (existing) {
+            return prev.map(p => 
+              p.userId === userId 
+                ? { ...p, streams: [...p.streams, newStream] } 
+                : p
+            );
+          }
+          return [...prev, { userId, streams: [newStream], isLocal: false }];
+        });
       }
     };
 
@@ -512,6 +500,20 @@ export default function CallPage() {
     });
   };
 
+  // Update the participant state management
+  useEffect(() => {
+    const newParticipants = participants.map(participant => {
+      return {
+        ...participant,
+        streams: participant.streams.filter(stream => 
+          stream.active && stream.getTracks().some(track => track.readyState === 'live')
+        )
+      };
+    }).filter(p => p.streams.length > 0);
+    
+    setParticipants(newParticipants);
+  }, [participants]); // Add proper dependencies based on your application logic
+
   return (
     <div className="min-h-screen bg-black text-white pt-16 px-8 pb-8 md:pt-20">
       <div className="max-w-[2000px] mx-auto">
@@ -646,75 +648,82 @@ export default function CallPage() {
           <h2 className="text-xl font-bold mb-4">Available Streams</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
             {participants.map((participant) => 
-              participant.streams.map((stream, streamIndex) => (
-                <div
-                  key={`${participant.userId}-${streamIndex}`}
-                  className="relative aspect-video bg-black rounded-lg overflow-hidden group cursor-pointer transform hover:scale-[1.02] transition-transform"
-                  onClick={(e) => {
-                    const video = e.currentTarget.querySelector('video');
-                    if (video) handleVideoClick(video);
-                  }}
-                >
-                  <video
-                    ref={el => {
-                      if (el && el.srcObject !== stream) {
-                        el.srcObject = stream;
-                        // Add retry logic for play failures
-                        const playVideo = async () => {
+              participant.streams.map((stream, streamIndex) => {
+                // Create new video element if needed
+                const videoExists = document.getElementById(`video-${participant.userId}-${streamIndex}`);
+                if (!videoExists) {
+                  const newVideo = document.createElement('video');
+                  newVideo.id = `video-${participant.userId}-${streamIndex}`;
+                  newVideo.srcObject = stream;
+                  newVideo.autoplay = true;
+                  newVideo.playsInline = true;
+                  newVideo.className = 'w-full h-full object-cover';
+                  newVideo.onloadedmetadata = () => {
+                    newVideo.play().catch(err => {
+                      if (err.name !== 'AbortError') {
+                        console.error('Error playing video:', err);
+                      }
+                    });
+                  };
+                  
+                  // Ensure video tracks are enabled
+                  stream.getVideoTracks().forEach(track => {
+                    track.enabled = true;
+                  });
+                }
+
+                return (
+                  <div key={`${participant.userId}-${streamIndex}`} className="relative aspect-video bg-zinc-900 rounded-xl overflow-hidden">
+                    <video
+                      id={`video-${participant.userId}-${streamIndex}`}
+                      ref={(el) => {
+                        if (el && !selectedVideos.includes(el)) {
+                          setSelectedVideos(prev => [...prev, el]);
+                        }
+                      }}
+                      autoPlay
+                      playsInline
+                      muted={participant.isLocal}
+                      className="w-full h-full object-cover"
+                      onLoadedMetadata={(e) => {
+                        const video = e.target as HTMLVideoElement;
+                        const playVideo = () => {
                           try {
-                            // Only play if video is paused
-                            if (el.paused) {
-                              await el.play();
+                            if (video.paused) {
+                              video.play().catch(err => {
+                                if (err.name === 'AbortError') {
+                                  setTimeout(playVideo, 100);
+                                }
+                              });
                             }
                           } catch (err) {
-                            if (err instanceof Error) {
-                              // Handle abort errors by retrying
-                              if (err.name === 'AbortError') {
-                                console.log('Retrying video playback...');
-                                // Retry after a short delay
-                                setTimeout(playVideo, 100);
-                              } else {
-                                console.error('Video playback error:', err);
-                              }
-                            }
+                            console.error('Video play error:', err);
                           }
                         };
                         playVideo();
-                      }
-                    }}
-                    autoPlay
-                    playsInline
-                    muted={participant.isLocal}
-                    className="w-full h-full object-cover"
-                    onLoadedMetadata={(e) => {
-                      // Ensure video plays when metadata is loaded
-                      const video = e.target as HTMLVideoElement;
-                      if (video.paused) {
-                        video.play().catch(err => {
-                          if (err.name !== 'AbortError') {
-                            console.error('Error playing video:', err);
-                          }
-                        });
-                      }
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-sm">
-                    <span className="bg-black/50 px-2 py-1 rounded">
-                      {participant.isLocal ? 'You' : participant.userId}
-                      {participant.streams.length > 1 && ` - Stream ${streamIndex + 1}`}
-                    </span>
-                    {selectedVideos.find(v => v.srcObject === stream) && (
-                      <span className="bg-white text-black px-2 py-1 rounded-full text-xs">
-                        Selected
+                        
+                        // Fallback in case loadedmetadata doesn't fire
+                        setTimeout(playVideo, 1000);
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-sm">
+                      <span className="bg-black/50 px-2 py-1 rounded">
+                        {participant.isLocal ? 'You' : participant.userId}
+                        {participant.streams.length > 1 && ` - Stream ${streamIndex + 1}`}
                       </span>
-                    )}
+                      {selectedVideos.find(v => v.srcObject === stream) && (
+                        <span className="bg-white text-black px-2 py-1 rounded-full text-xs">
+                          Selected
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                ))
-              )}
-            </div>
+                );
+              })
+            )}
           </div>
+        </div>
 
         {/* Room and Stream Settings - Only visible on small screens */}
         <div className="lg:hidden mt-8 bg-zinc-900 p-4 rounded-xl shadow-2xl">
