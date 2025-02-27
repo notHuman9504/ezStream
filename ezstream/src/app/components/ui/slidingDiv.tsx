@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
-import { useSelector } from 'react-redux';
-import { setLoading } from '@/redux/loading/loadingSlice';
-import { RootState } from '@/redux/store';
+import { useState, useEffect } from "react";
+import { useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
+import { setLoading } from "@/redux/loading/loadingSlice";
+import { RootState } from "@/redux/store";
 
 interface props {
   delay: number;
@@ -14,7 +14,7 @@ interface props {
 const SlidingDiv = ({ delay, color }: props) => {
   const dispatch = useDispatch();
   const phase = useSelector((state: RootState) => state.loading.loading);
-  const [tempPhase, setTempPhase] = useState('initial');
+  const [tempPhase, setTempPhase] = useState("initial");
   const [pageLoaded, setPageLoaded] = useState(false);
   const [componentMounted, setComponentMounted] = useState(false);
 
@@ -28,32 +28,35 @@ const SlidingDiv = ({ delay, color }: props) => {
   useEffect(() => {
     const handleLoad = () => setPageLoaded(true);
 
-    if (document.readyState === 'complete') {
+    if (document.readyState === "complete") {
       setPageLoaded(true);
     } else {
-      window.addEventListener('load', handleLoad);
+      window.addEventListener("load", handleLoad);
     }
 
-    return () => window.removeEventListener('load', handleLoad);
+    return () => window.removeEventListener("load", handleLoad);
   }, []);
 
   useEffect(() => {
-    if (phase !== 'initial') {
-      setTempPhase('initial');
-      dispatch(setLoading('initial'));
+    if (phase !== "initial") {
+      setTempPhase("initial");
+      dispatch(setLoading("initial"));
     }
   }, [phase]);
 
   // Animation sequence starts only when both conditions are met
   useEffect(() => {
-    if (tempPhase === 'initial' && pageLoaded && componentMounted) {
-      setTimeout(() => {
-        setTempPhase('cover');
-      }, 600 + delay * 50);
+    if (tempPhase === "initial" && pageLoaded && componentMounted) {
+      setTimeout(
+        () => {
+          setTempPhase("cover");
+        },
+        600 + delay * 50
+      );
     }
-    if (tempPhase === 'cover') {
+    if (tempPhase === "cover") {
       setTimeout(() => {
-        setTempPhase('exit');
+        setTempPhase("exit");
       }, 1500);
     }
   }, [tempPhase, pageLoaded, componentMounted, delay]);
@@ -67,20 +70,24 @@ const SlidingDiv = ({ delay, color }: props) => {
         `}
       </style>
       <div
-        className={`fixed left-0 w-full h-screen bg-${color} z-[100] transition-all ease-in-out flex items-end justify-center
-          ${tempPhase === 'initial' ? 'translate-y-full duration-0' : ''}
-          ${tempPhase === 'cover' ? 'translate-y-0 duration-1000' : ''}
-          ${tempPhase === 'exit' ? '-translate-y-full duration-1000' : ''}
+        className={`fixed left-0 w-full h-screen bg-${color} z-[100] transition-all ease-in-out flex items-center justify-center
+          ${tempPhase === "initial" ? "translate-y-full duration-0" : ""}
+          ${tempPhase === "cover" ? "translate-y-0 duration-1000" : ""}
+          ${tempPhase === "exit" ? "-translate-y-full duration-1000" : ""}
         `}
       >
         <div
           style={{
             fontFamily: "'Bungee Inline', cursive",
-            textAlign: 'center',
-            fontSize: 'min(15vw, 300px)',
-            lineHeight: '1',
-            letterSpacing: '-0.02em',
-            whiteSpace: 'nowrap',
+            textAlign: "center",
+            fontSize: "min(15vw, 300px)",
+            lineHeight: "1",
+            letterSpacing: "-0.02em",
+            whiteSpace: "nowrap",
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
           }}
         >
           STREAM

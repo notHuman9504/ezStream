@@ -61,3 +61,9 @@ html {
     scroll-snap-stop: always;
   }
 }
+
+/* Add these styles */
+
+main {
+  transition: filter 0.8s ease-in-out;
+}
