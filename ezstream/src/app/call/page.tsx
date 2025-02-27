@@ -44,9 +44,6 @@ export default function CallPage() {
   const [canvasWidth, setCanvasWidth] = useState(640);
   const [canvasHeight, setCanvasHeight] = useState(360);
 
-  // Add with other refs at the top of the component
-  const peerCleanupFunctions = useRef<{ [key: string]: () => void }>({});
-
   // Add this useEffect for handling resize
   useEffect(() => {
     const handleResize = () => {
@@ -124,201 +121,10 @@ export default function CallPage() {
       console.error("Streaming socket error:", error);
     });
 
-    // New connection status monitoring
-    const monitorConnectionStatus = (peerId: string, pc: RTCPeerConnection) => {
-      const checkConnectionStatus = () => {
-        const connectionState = pc.connectionState;
-        const iceConnectionState = pc.iceConnectionState;
-
-        console.log(
-          `Connection to ${peerId}: ${connectionState}, ICE: ${iceConnectionState}`
-        );
-
-        socketRef.current?.emit("connection-status", {
-          peerId,
-          status: { connectionState, iceConnectionState },
-        });
-
-        // If we have a connection issue, try restarting ICE
-        if (
-          iceConnectionState === "disconnected" ||
-          iceConnectionState === "failed"
-        ) {
-          console.log(`Attempting to restart ICE connection to ${peerId}`);
-          try {
-            // Create and send a new offer with ICE restart
-            pc.createOffer({ iceRestart: true })
-              .then((offer) => pc.setLocalDescription(offer))
-              .then(() => {
-                socketRef.current?.emit("offer", {
-                  to: peerId,
-                  sdp: pc.localDescription,
-                  iceRestart: true,
-                });
-              });
-          } catch (err) {
-            console.error("Error restarting ICE:", err);
-          }
-        }
-      };
-
-      // Check status initially and then periodically
-      checkConnectionStatus();
-      const intervalId = setInterval(checkConnectionStatus, 5000);
-
-      return intervalId;
+    return () => {
+      socketRef.current?.disconnect();
+      streamingSocketRef.current?.disconnect();
     };
-
-    // Add handling for peer connection status updates
-    socketRef.current.on("peer-connection-status", (data) => {
-      const { from, status } = data;
-      console.log(`Received status from ${from}:`, status);
-
-      // If their connection to us is failing but we think it's fine,
-      // let's also try an ICE restart from our side
-      const pc = peersRef.current[from];
-      if (
-        pc &&
-        status.iceConnectionState === "failed" &&
-        pc.iceConnectionState !== "failed" &&
-        pc.iceConnectionState !== "disconnected"
-      ) {
-        console.log(
-          `Remote peer ${from} reports failed connection, restarting ICE`
-        );
-        pc.createOffer({ iceRestart: true })
-          .then((offer) => pc.setLocalDescription(offer))
-          .then(() => {
-            socketRef.current?.emit("offer", {
-              to: from,
-              sdp: pc.localDescription,
-              iceRestart: true,
-            });
-          });
-      }
-    });
-
-    // Modify the createPeer function to include connection monitoring
-    const createPeer = (userId: string, initiator = false) => {
-      console.log(
-        `Creating peer connection with ${userId}, initiator: ${initiator}`
-      );
-
-      // Configure ICE servers properly
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun1.l.google.com:19302" },
-          { urls: "stun2.l.google.com:19302" },
-          // Add TURN servers for reliable connections
-          // {
-          //   urls: "turn:your-turn-server.com:3478",
-          //   username: "username",
-          //   credential: "password"
-          // }
-        ],
-        iceTransportPolicy: "all",
-      });
-
-      // Start connection monitoring
-      const monitorId = monitorConnectionStatus(userId, pc);
-
-      // Store a cleanup function in an object mapped to the peer ID
-      peerCleanupFunctions.current[userId] = () => {
-        clearInterval(monitorId);
-      };
-
-      // Add local tracks
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => {
-          console.log(`Adding local track to peer ${userId}:`, track.kind);
-          pc.addTrack(track, localStreamRef.current!);
-        });
-      }
-
-      // Handle remote tracks with better error handling
-      pc.ontrack = (event) => {
-        console.log(`Received ${event.track.kind} track from ${userId}`);
-
-        // Ensure the video track starts playing
-        if (event.track.kind === "video") {
-          event.track.onunmute = () => {
-            console.log(`Track unmuted from ${userId}`);
-            socketRef.current?.emit("stream-ready", { to: userId });
-          };
-        }
-
-        // Update participants with the new stream
-        setParticipants((prev) => {
-          const participant = prev.find((p) => p.userId === userId);
-          if (participant) {
-            // Check if we already have this stream
-            const streamExists = participant.streams.some(
-              (s) => s.id === event.streams[0].id
-            );
-
-            if (!streamExists) {
-              return prev.map((p) => {
-                if (p.userId === userId) {
-                  return {
-                    ...p,
-                    streams: [...p.streams, event.streams[0]],
-                  };
-                }
-                return p;
-              });
-            }
-          } else {
-            return [
-              ...prev,
-              {
-                userId,
-                streams: [event.streams[0]],
-                isLocal: false,
-              },
-            ];
-          }
-          return prev;
-        });
-      };
-
-      // Rest of your peer setup code...
-
-      return pc;
-    };
-
-    // Add handler for stream-ready event
-    socketRef.current.on("stream-ready", (data) => {
-      console.log(`Stream is ready from ${data.from}`);
-
-      // Force any video elements to play if they're in a paused state
-      setParticipants((prev) => {
-        return prev.map((p) => {
-          if (p.userId === data.from) {
-            // Force video elements to play if they're paused
-            setTimeout(() => {
-              const videos = document.querySelectorAll(
-                `video[data-user-id="${data.from}"]`
-              );
-              videos.forEach((video) => {
-                const videoElement = video as HTMLVideoElement;
-                if (videoElement.paused) {
-                  console.log(`Forcing play on video from ${data.from}`);
-                  videoElement
-                    .play()
-                    .catch((err: Error) =>
-                      console.error("Error playing video:", err)
-                    );
-                }
-              });
-            }, 500);
-          }
-          return p;
-        });
-      });
-    });
-
-    // Rest of your socket setup...
   }, []);
 
   // Join room and setup local stream
@@ -345,6 +151,110 @@ export default function CallPage() {
       console.error("Error accessing media devices:", err);
     }
   };
+
+  // WebRTC peer connection setup
+  const createPeer = (userId: string): RTCPeerConnection => {
+    const peer = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+
+    // Add camera tracks if not already added
+    if (localStreamRef.current) {
+      const existingTracks = peer.getSenders().map((s) => s.track);
+      localStreamRef.current.getTracks().forEach((track) => {
+        if (!existingTracks.includes(track)) {
+          peer.addTrack(track, localStreamRef.current!);
+        }
+      });
+    }
+
+    // Add screen tracks if not already added
+    if (screenStreamRef.current) {
+      const existingTracks = peer.getSenders().map((s) => s.track);
+      screenStreamRef.current.getTracks().forEach((track) => {
+        if (!existingTracks.includes(track)) {
+          peer.addTrack(track, screenStreamRef.current!);
+        }
+      });
+    }
+
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        socketRef.current?.emit("ice-candidate", {
+          candidate: event.candidate,
+          to: userId,
+        });
+      }
+    };
+
+    peer.ontrack = (event) => {
+      const stream = event.streams[0];
+      if (stream) {
+        handleTrack(userId, stream);
+      }
+    };
+
+    return peer;
+  };
+
+  // Socket event handlers
+  useEffect(() => {
+    if (!joined || !socketRef.current) return;
+
+    socketRef.current.on("user-connected", async (userId: string) => {
+      const peer = createPeer(userId);
+      peersRef.current[userId] = peer;
+
+      try {
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socketRef.current?.emit("offer", { offer, to: userId });
+      } catch (err) {
+        console.error("Error creating offer:", err);
+      }
+    });
+
+    socketRef.current.on("user-disconnected", (userId: string) => {
+      if (peersRef.current[userId]) {
+        peersRef.current[userId].close();
+        delete peersRef.current[userId];
+        setParticipants((prev) => prev.filter((p) => p.userId !== userId));
+      }
+    });
+
+    socketRef.current.on("offer", handleOffer);
+    socketRef.current.on("answer", handleAnswer);
+    socketRef.current.on("ice-candidate", handleIceCandidate);
+
+    socketRef.current.on(
+      "existing-users",
+      async (users: { id: string; isScreenSharing: boolean }[]) => {
+        for (const user of users) {
+          if (!peersRef.current[user.id]) {
+            const peer = createPeer(user.id);
+            peersRef.current[user.id] = peer;
+
+            // If user is screen sharing, we'll receive their screen share stream through normal WebRTC events
+            try {
+              const offer = await peer.createOffer();
+              await peer.setLocalDescription(offer);
+              socketRef.current?.emit("offer", { offer, to: user.id });
+            } catch (err) {
+              console.error("Error creating offer:", err);
+            }
+          }
+        }
+      }
+    );
+
+    socketRef.current.on("user-screen-share-started", (userId: string) => {
+      console.log("User started screen sharing:", userId);
+    });
+
+    socketRef.current.on("user-screen-share-stopped", (userId: string) => {
+      console.log("User stopped screen sharing:", userId);
+    });
+  }, [joined]);
 
   // WebRTC signaling handlers
   const handleOffer = async ({
@@ -632,113 +542,6 @@ export default function CallPage() {
     });
   };
 
-  // Define at component level - before all useEffects
-  const createPeer = (userId: string, initiator = false): RTCPeerConnection => {
-    console.log(
-      `Creating peer connection with ${userId}, initiator: ${initiator}`
-    );
-
-    // Configure ICE servers properly
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun1.l.google.com:19302" },
-        { urls: "stun2.l.google.com:19302" },
-      ],
-      iceTransportPolicy: "all",
-    });
-
-    // Add local tracks
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
-        console.log(`Adding local track to peer ${userId}:`, track.kind);
-        pc.addTrack(track, localStreamRef.current!);
-      });
-    }
-
-    // Add screen tracks if sharing
-    if (isScreenSharing && screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((track) => {
-        pc.addTrack(track, screenStreamRef.current!);
-      });
-    }
-
-    // Rest of your peer setup code
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        socketRef.current?.emit("ice-candidate", {
-          candidate: event.candidate,
-          to: userId,
-        });
-      }
-    };
-
-    pc.ontrack = (event) => {
-      const stream = event.streams[0];
-      if (stream) {
-        handleTrack(userId, stream);
-      }
-    };
-
-    // Start connection monitoring when moved to component scope
-    if (monitorConnectionStatus) {
-      const monitorId = monitorConnectionStatus(userId, pc);
-      peerCleanupFunctions.current[userId] = () => {
-        clearInterval(monitorId);
-      };
-    }
-
-    return pc;
-  };
-
-  // Add a monitorConnectionStatus declaration at component level too
-  const monitorConnectionStatus = (
-    peerId: string,
-    pc: RTCPeerConnection
-  ): number => {
-    const checkConnectionStatus = () => {
-      const connectionState = pc.connectionState;
-      const iceConnectionState = pc.iceConnectionState;
-
-      console.log(
-        `Connection to ${peerId}: ${connectionState}, ICE: ${iceConnectionState}`
-      );
-
-      socketRef.current?.emit("connection-status", {
-        peerId,
-        status: { connectionState, iceConnectionState },
-      });
-
-      // If we have a connection issue, try restarting ICE
-      if (
-        iceConnectionState === "disconnected" ||
-        iceConnectionState === "failed"
-      ) {
-        console.log(`Attempting to restart ICE connection to ${peerId}`);
-        try {
-          // Create and send a new offer with ICE restart
-          pc.createOffer({ iceRestart: true })
-            .then((offer) => pc.setLocalDescription(offer))
-            .then(() => {
-              socketRef.current?.emit("offer", {
-                to: peerId,
-                offer: pc.localDescription,
-                iceRestart: true,
-              });
-            });
-        } catch (err) {
-          console.error("Error restarting ICE:", err);
-        }
-      }
-    };
-
-    // Initial check
-    checkConnectionStatus();
-
-    // Return the interval ID
-    return window.setInterval(checkConnectionStatus, 5000);
-  };
-
   return (
     <div className="min-h-screen bg-black text-white pt-16 px-8 pb-8 md:pt-20">
       <div className="max-w-[2000px] mx-auto">
@@ -917,15 +720,18 @@ export default function CallPage() {
                     autoPlay
                     playsInline
                     muted={participant.isLocal}
-                    data-user-id={participant.userId}
-                    onLoadedMetadata={(e) => {
-                      e.currentTarget
-                        .play()
-                        .catch((err) =>
-                          console.error("Error playing video:", err)
-                        );
-                    }}
                     className="w-full h-full object-cover"
+                    onLoadedMetadata={(e) => {
+                      // Ensure video plays when metadata is loaded
+                      const video = e.target as HTMLVideoElement;
+                      if (video.paused) {
+                        video.play().catch((err) => {
+                          if (err.name !== "AbortError") {
+                            console.error("Error playing video:", err);
+                          }
+                        });
+                      }
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-sm">
