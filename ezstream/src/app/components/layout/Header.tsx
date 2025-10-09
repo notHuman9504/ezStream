@@ -26,7 +26,7 @@ export default function Header() {
 
   const navItems: NavItem[] = [
     { name: 'Home', url: '/', icon: Home },
-    { name: 'About', url: '/about', icon: User },
+    // { name: 'About', url: '/about', icon: User },
     { name: 'Call', url: '/call', icon: Phone },
     ...(userEmail 
       ? [{ name: 'Logout', url: '#', icon: LogOut }]
