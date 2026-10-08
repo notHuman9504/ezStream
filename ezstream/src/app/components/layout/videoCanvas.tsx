@@ -1,389 +1,240 @@
-import React, { useRef, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Socket } from "socket.io-client";
+import type { CanvasSource } from "@/types/canvas";
+import type { OverlayConfig } from "@/types/overlay";
+import {
+  AudioMixer,
+  computeLayout,
+  drawVideoInRect,
+  getDrawElement,
+  getSupportedMimeType,
+  probeHtmlInCanvas,
+  startFrameClock,
+} from "@/lib/compositor";
+import { OverlayState, StreamOverlay, paintOverlayFallback } from "./streamOverlay";
+
+export type StreamStatus =
+  | { state: 'idle' }
+  | { state: 'starting' }
+  | { state: 'live' }
+  | { state: 'error'; message: string };
+
+export type OverlayRenderer = 'html' | 'fallback';
 
 type VideoCanvasProps = {
-  videoRefs: HTMLVideoElement[];
+  sources: CanvasSource[];
+  overlay: OverlayConfig;
   width?: number;
   height?: number;
+  fps?: number;
+  bitrate?: number;
   isStreaming?: boolean;
   streamingSocket?: Socket | null;
   rtmpUrl?: string;
   streamKey?: string;
-  fps?: number;
+  onStatusChange?: (status: StreamStatus) => void;
+  onRendererChange?: (renderer: OverlayRenderer) => void;
 };
 
-const VideoCanvas: React.FC<VideoCanvasProps> = ({ 
-  videoRefs, 
-  width = 1280, 
+const sourceStreams = (sources: CanvasSource[]) =>
+  sources
+    .map(s => s.video.srcObject)
+    .filter((s): s is MediaStream => s instanceof MediaStream);
+
+const VideoCanvas: React.FC<VideoCanvasProps> = ({
+  sources,
+  overlay,
+  width = 1280,
   height = 720,
+  fps = 30,
+  bitrate = 2_500_000,
   isStreaming = false,
   streamingSocket,
   rtmpUrl,
   streamKey,
-  fps = 30
+  onStatusChange,
+  onRendererChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioTimerRef = useRef<(() => void) | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const mixerRef = useRef<AudioMixer | null>(null);
 
-  const getSupportedMimeType = () => {
-    const types = [
-      'video/webm;codecs=h264,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm;codecs=vp9,opus',
-      'video/webm'
-    ];
-    return types.find(type => MediaRecorder.isTypeSupported(type)) || '';
-  };
+  const tiles = useMemo(() => {
+    const rects = computeLayout(sources.length, width, height, overlay.layout);
+    return sources.map((source, i) => ({ rect: rects[i], label: source.label }));
+  }, [sources, width, height, overlay.layout]);
 
-  // Audio timer implementation
-  const createAudioTimer = (callback: () => void, frequency: number) => {
-    const audioContext = new AudioContext();
-    audioContextRef.current = audioContext;
-    
-    const silenceNode = audioContext.createGain();
-    silenceNode.gain.value = 0;
-    silenceNode.connect(audioContext.destination);
-    
-    let isStopped = false;
-    
-    function createOscillator() {
-      if (isStopped) return;
-      
-      const osc = audioContext.createOscillator();
-      osc.onended = () => {
-        if (!isStopped) {
-          callback();
-          createOscillator();
-        }
-      };
-      osc.connect(silenceNode);
-      osc.start(0);
-      osc.stop(audioContext.currentTime + frequency / 1000);
-    }
-    
-    createOscillator();
-    
-    return () => {
-      isStopped = true;
-      audioContext.close();
-    };
-  };
+  const overlayState: OverlayState = { config: overlay, width, height, tiles, isLive: isStreaming };
 
+  // The frame loop and the recorder live for a long time; they read the latest
+  // props through refs instead of restarting whenever something changes.
+  const latest = useRef({ sources, overlayState, rtmpUrl, streamKey, bitrate, onStatusChange });
+  latest.current = { sources, overlayState, rtmpUrl, streamKey, bitrate, onStatusChange };
+
+  const [renderer, setRenderer] = useState<OverlayRenderer>('fallback');
+  useEffect(() => onRendererChange?.(renderer), [renderer, onRendererChange]);
+
+  // Draw loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Improved video grid layout calculations
-    const calculateLayout = () => {
-      const count = videoRefs.length;
-      
-      // Handle special cases for better layouts
-      if (count === 0) return { rows: 1, cols: 1 };
-      if (count === 1) return { rows: 1, cols: 1 };
-      if (count === 2) return { rows: 1, cols: 2 };
-      if (count === 3) return { rows: 2, cols: 2, specialCase: 'three' };
-      if (count === 4) return { rows: 2, cols: 2 };
-      if (count === 5 || count === 6) return { rows: 2, cols: 3 };
-      if (count === 7 || count === 8) return { rows: 2, cols: 4 };
-      if (count === 9) return { rows: 3, cols: 3 };
-      
-      // For more than 9 participants, use the square root approach
-      const sqrt = Math.sqrt(count);
-      const cols = Math.ceil(sqrt);
-      const rows = Math.ceil(count / cols);
-      return { rows, cols };
-    };
+    let drawElement: ReturnType<typeof getDrawElement> = null;
+    let cancelled = false;
+    probeHtmlInCanvas().then(supported => {
+      if (cancelled || !supported) return;
+      drawElement = getDrawElement(ctx);
+      setRenderer(drawElement ? 'html' : 'fallback');
+    });
+    const startedAt = performance.now();
 
-    // Improved draw videos function with centered layout
-    const drawVideos = () => {
-      // Modern dark background
+    const drawFrame = () => {
+      const { sources, overlayState } = latest.current;
+
       ctx.fillStyle = '#0A0A0A';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      const { rows, cols } = calculateLayout();
-      
-      // Reduced padding for tighter layout
-      const padding = 8;
-      const availableWidth = canvas.width - (padding * (cols + 1));
-      const availableHeight = canvas.height - (padding * (rows + 1));
-      const cellWidth = availableWidth / cols;
-      const cellHeight = availableHeight / rows;
+      ctx.fillRect(0, 0, width, height);
 
-      // Calculate starting position to center the grid
-      const startX = (canvas.width - (cols * cellWidth + (cols - 1) * padding)) / 2;
-      const startY = (canvas.height - (rows * cellHeight + (rows - 1) * padding)) / 2;
-
-      // Draw subtle grid pattern
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-      ctx.lineWidth = 1;
-      for (let i = 1; i < cols; i++) {
-        const x = startX + (i * (cellWidth + padding)) - padding/2;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
-        ctx.stroke();
-      }
-      for (let i = 1; i < rows; i++) {
-        const y = startY + (i * (cellHeight + padding)) - padding/2;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
+      if (sources.length === 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = `500 ${Math.round(width / 50)}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Select streams below to add them to the canvas', width / 2, height / 2);
+        ctx.textAlign = 'left';
       }
 
-      videoRefs.forEach((video, index) => {
-        if (video.readyState >= 2) {
-          let x = startX;
-          let y = startY;
-          let currentCellWidth = cellWidth;
-          let currentCellHeight = cellHeight;
-
-          if (videoRefs.length === 3) {
-            if (index === 0) {
-              // First video takes full height in first column
-              currentCellWidth = cellWidth;
-              currentCellHeight = cellHeight * 2 + padding;
-              x = startX;
-              y = startY;
-            } else {
-              // Second and third videos stack in second column
-              currentCellWidth = cellWidth;
-              currentCellHeight = cellHeight;
-              x = startX + cellWidth + padding;
-              y = startY + (index - 1) * (cellHeight + padding);
-            }
-          } else {
-            // Normal grid layout for other cases
-            const col = index % cols;
-            const row = Math.floor(index / cols);
-            x = startX + (col * (cellWidth + padding));
-            y = startY + (row * (cellHeight + padding));
-          }
-
-          // Add subtle shadow behind each video cell
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-          ctx.shadowBlur = 12;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 2;
-
-          // Create clipping region with rounded corners
-          ctx.save();
-          ctx.beginPath();
-          ctx.roundRect(x, y, currentCellWidth, currentCellHeight, 8);
-          ctx.clip();
-
-          // Draw video
-          const videoAspect = video.videoWidth / video.videoHeight;
-          const drawHeight = currentCellHeight;
-          const drawWidth = currentCellHeight * videoAspect;
-          const offsetX = (currentCellWidth - drawWidth) / 2;
-
-          ctx.drawImage(video, 
-            x + offsetX, y, 
-            drawWidth, drawHeight
-          );
-
-          // Add subtle gradient overlay
-          const gradient = ctx.createLinearGradient(x, y, x, y + currentCellHeight);
-          gradient.addColorStop(0, 'rgba(0, 0, 0, 0.2)');
-          gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(x, y, currentCellWidth, currentCellHeight);
-          
-          ctx.restore();
-          
-          // Reset shadow for border
-          ctx.shadowColor = 'transparent';
-          drawBorder(ctx, x, y, currentCellWidth, currentCellHeight);
+      overlayState.tiles.forEach(({ rect }, i) => {
+        const source = sources[i];
+        if (rect && source && source.video.readyState >= 2) {
+          drawVideoInRect(ctx, source.video, rect, source.isScreen ? 'contain' : 'cover');
         }
       });
 
-      drawWatermark(ctx, canvas.width, canvas.height);
+      // drawElementImage throws until the browser has taken the first snapshot
+      // of the canvas children, so fall back for that frame.
+      let drewHtml = false;
+      if (drawElement && overlayRef.current) {
+        try {
+          drawElement(overlayRef.current, 0, 0, width, height);
+          drewHtml = true;
+        } catch {
+          drewHtml = false;
+        }
+      }
+      if (!drewHtml) paintOverlayFallback(ctx, overlayState, performance.now() - startedAt);
     };
 
-    // Start audio timer loop instead of requestAnimationFrame
-    const frameInterval = 1000 / fps; // Convert fps to milliseconds
-    const stopAudioTimer = createAudioTimer(drawVideos, frameInterval);
-    audioTimerRef.current = stopAudioTimer;
-
-    // Cleanup
+    const stopClock = startFrameClock(fps, drawFrame);
     return () => {
-      if (audioTimerRef.current) {
-        audioTimerRef.current();
-      }
+      cancelled = true;
+      stopClock();
     };
-  }, [videoRefs, width, height, fps]);
+  }, [width, height, fps]);
 
-  // Streaming logic
+  // Keep the audio mix in sync with the selected tiles while live. Tracks can
+  // also appear on an existing stream (e.g. a peer unmutes), so re-check periodically.
   useEffect(() => {
-    if (!isStreaming || !streamingSocket) {
-      // Clean up when streaming is stopped
-      if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
-        mediaRecorderRef.current = null;
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => {
-          track.stop();
-        });
-        streamRef.current = null;
-      }
-      streamingSocket?.emit('stream:stop');
+    mixerRef.current?.sync(sourceStreams(sources));
+  }, [sources]);
+
+  // Streaming
+  useEffect(() => {
+    if (!isStreaming) return;
+
+    const report = (status: StreamStatus) => latest.current.onStatusChange?.(status);
+    const canvas = canvasRef.current;
+    const socket = streamingSocket;
+    if (!canvas || !socket) {
+      report({ state: 'error', message: 'Streaming server is not connected' });
+      return;
+    }
+    const mimeType = getSupportedMimeType();
+    if (typeof MediaRecorder === 'undefined' || !mimeType) {
+      report({ state: 'error', message: 'This browser cannot record the canvas' });
       return;
     }
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const mixer = new AudioMixer();
+    mixerRef.current = mixer;
+    mixer.sync(sourceStreams(latest.current.sources));
+    void mixer.resume();
+    const resync = window.setInterval(() => mixer.sync(sourceStreams(latest.current.sources)), 1000);
 
-    const startStreaming = async () => {
-      try {
-        // Only create new stream if one doesn't exist
-        if (!streamRef.current) {
-          const stream = canvas.captureStream(fps);
-          streamRef.current = stream;
-        }
+    const videoTrack = canvas.captureStream(fps).getVideoTracks()[0];
+    const recorder = new MediaRecorder(new MediaStream([videoTrack, mixer.track]), {
+      mimeType,
+      videoBitsPerSecond: latest.current.bitrate,
+      audioBitsPerSecond: 128_000,
+    });
 
-        // Handle audio tracks more carefully
-        const stream = streamRef.current;
-        const newAudioTracks: MediaStreamTrack[] = [];
-        
-        // Create all new tracks first
-        videoRefs.forEach(video => {
-          const audioTracks = (video.srcObject as MediaStream)?.getAudioTracks() || [];
-          audioTracks.forEach(track => {
-            newAudioTracks.push(track.clone());
-          });
-        });
-
-        // Stop the MediaRecorder temporarily if it's active
-        if (mediaRecorderRef.current?.state === 'recording') {
-          mediaRecorderRef.current.pause();
-        }
-
-        // Create a new MediaStream with the video track
-        const videoTrack = stream.getVideoTracks()[0];
-        const newStream = new MediaStream([videoTrack]);
-        
-        // Add all new audio tracks to the new stream
-        newAudioTracks.forEach(track => {
-          newStream.addTrack(track);
-        });
-
-        // Replace the old stream with the new one
-        streamRef.current = newStream;
-
-        // Create new MediaRecorder with the new stream
-        if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
-          const mimeType = getSupportedMimeType();
-          if (!mimeType) {
-            throw new Error('No supported video codec found');
-          }
-
-          const mediaRecorder = new MediaRecorder(newStream, {
-            mimeType,
-            videoBitsPerSecond: 3000000,
-            audioBitsPerSecond: 128000
-          });
-
-          mediaRecorderRef.current = mediaRecorder;
-
-          mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0 && streamingSocket.connected) {
-              streamingSocket.volatile.emit('stream:data', event.data);
-            }
-          };
-
-          mediaRecorder.onerror = (event: Event) => {
-            const error = (event as any).error;
-            console.error('MediaRecorder error:', {
-              message: error?.message,
-              name: error?.name
-            });
-            
-            // Only restart if it's not a fatal error
-            if (error?.name !== 'InvalidStateError') {
-              restartStream();
-            }
-          };
-
-          mediaRecorder.start(100); // 100ms chunks
-
-          // Only emit stream:start when starting a new stream
-          streamingSocket.emit('stream:start', {
-            rtmpUrl,
-            streamKey,
-            settings: {
-              width,
-              height,
-              fps,
-              bitrate: 3000000
-            }
-          });
-        } else if (mediaRecorderRef.current.state === 'paused') {
-          mediaRecorderRef.current.resume();
-        }
-
-      } catch (error) {
-        console.error('Stream setup error:', error);
+    // Not volatile: every chunk is part of one WebM file, and a dropped chunk
+    // corrupts the container for ffmpeg.
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0 && socket.connected) {
+        socket.emit('stream:data', event.data);
       }
     };
-
-    const restartStream = () => {
-      if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
-        setTimeout(startStreaming, 1000);
-      }
+    recorder.onerror = (event) => {
+      const error = (event as Event & { error?: DOMException }).error;
+      report({ state: 'error', message: error?.message || 'Recording failed' });
     };
 
-    startStreaming();
+    // Only record once ffmpeg is running: the first chunk carries the WebM
+    // header, and the server drops data that arrives before the process exists.
+    const onStarted = () => {
+      if (recorder.state === 'inactive') recorder.start(250);
+      report({ state: 'live' });
+    };
+    const onError = (payload: { message?: string } | string) =>
+      report({ state: 'error', message: typeof payload === 'string' ? payload : payload?.message || 'Stream failed' });
+    const onStopped = (payload?: { code?: number | null }) => {
+      if (payload?.code) report({ state: 'error', message: `Encoder exited (code ${payload.code})` });
+    };
+    const onDisconnect = () => report({ state: 'error', message: 'Lost connection to the streaming server' });
+
+    socket.on('stream:started', onStarted);
+    socket.on('stream:error', onError);
+    socket.on('stream:stopped', onStopped);
+    socket.on('disconnect', onDisconnect);
+
+    report({ state: 'starting' });
+    const { rtmpUrl, streamKey, bitrate } = latest.current;
+    socket.emit('stream:start', {
+      rtmpUrl,
+      streamKey,
+      settings: { width, height, fps, bitrate },
+    });
 
     return () => {
-      // Cleanup will happen at the start of next effect run
+      socket.off('stream:started', onStarted);
+      socket.off('stream:error', onError);
+      socket.off('stream:stopped', onStopped);
+      socket.off('disconnect', onDisconnect);
+      window.clearInterval(resync);
+      if (recorder.state !== 'inactive') recorder.stop();
+      videoTrack.stop();
+      mixer.close();
+      mixerRef.current = null;
+      socket.emit('stream:stop');
+      report({ state: 'idle' });
     };
-  }, [isStreaming, streamingSocket, rtmpUrl, streamKey, fps, width, height, videoRefs]);
+  }, [isStreaming, streamingSocket, width, height, fps]);
 
-  return <canvas ref={canvasRef} width={width} height={height} />;
-};
-
-// Update border style to remove it completely
-const drawBorder = (
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number
-) => {
-  // Empty function - no border will be drawn
-};
-
-// Update watermark for better visibility
-const drawWatermark = (
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number
-) => {
-  // Add shadow for better visibility
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-  ctx.shadowBlur = 4;
-  ctx.shadowOffsetX = 2;
-  ctx.shadowOffsetY = 2;
-
-  // More visible watermark
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-  ctx.font = '700 18px Inter, system-ui, -apple-system, sans-serif';
-  ctx.fillText('ezStream', width - 100, height - 20);
-
-  // Reset shadow
-  ctx.shadowColor = 'transparent';
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 0;
+  return (
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      className="w-full h-full object-contain"
+      // HTML-in-Canvas opt-in (old and new attribute names). It has to be present
+      // when the children are first laid out, so it can't be added later.
+      {...{ layoutsubtree: '', content: 'drawable' }}
+    >
+      <StreamOverlay ref={overlayRef} {...overlayState} />
+    </canvas>
+  );
 };
 
 export default VideoCanvas;

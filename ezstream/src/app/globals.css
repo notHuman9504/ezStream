@@ -61,3 +61,8 @@ html {
     scroll-snap-stop: always;
   }
 }
+/* Scrolling ticker in the stream overlay (drawn into the canvas via HTML-in-Canvas) */
+@keyframes ezs-ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
