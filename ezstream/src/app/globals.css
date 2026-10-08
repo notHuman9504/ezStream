@@ -2,28 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Dark only: there is no light theme and no toggle. Colors are RGB channels so
+   Tailwind opacity modifiers work (bg-surface/80, text-fg/40, ...). */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    color-scheme: dark;
+
+    --bg: 2 1 8;            /* #020108 page */
+    --surface: 17 17 17;    /* #111111 cards, panels */
+    --muted: 26 26 26;      /* #1a1a1a secondary buttons, wells */
+    --elevated: 39 39 39;   /* #272727 floating nav pill */
+    --line: 42 42 48;       /* #2a2a30 hairlines, borders */
+    --fg: 255 255 255;
+    --brand: 253 123 3;     /* #FD7B03 */
+    --brand-deep: 249 74 0; /* #F94A00 */
+    --success: 52 211 153;
+    --danger: 255 92 82;
+  }
+
+  html {
+    background-color: rgb(var(--bg));
+    color: rgb(var(--fg));
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    min-height: 100dvh;
+    background-color: rgb(var(--bg));
+    color: rgb(var(--fg));
+    font-family: theme('fontFamily.sans');
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: rgb(var(--brand));
+    color: rgb(var(--bg));
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--fg) / 0.6);
+    outline-offset: 2px;
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: rgb(var(--fg));
+    -webkit-box-shadow: 0 0 0 1000px rgb(var(--muted)) inset;
+    caret-color: rgb(var(--fg));
+    transition: background-color 9999s ease-out;
   }
 }
 
@@ -44,23 +72,26 @@
   scrollbar-width: none;  /* Firefox */
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
-/* Optional: Add this if you want sections to snap into view */
-@media (min-width: 768px) {
-  .snap-container {
-    scroll-snap-type: y mandatory;
-    overflow-y: scroll;
-    height: 100vh;
+@layer components {
+  /* Full-bleed page frame with the site gutter. */
+  .shell {
+    @apply mx-auto w-full max-w-[1920px] px-4 sm:px-6;
   }
 
-  .snap-section {
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
+  /* Dot-matrix texture used under the footer and on empty canvases. */
+  .dots {
+    background-image: radial-gradient(circle at center, rgb(var(--fg) / 0.1) 0 4px, transparent 4.5px);
+    background-size: 18px 18px;
+    background-position: center top;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 /* Scrolling ticker in the stream overlay (drawn into the canvas via HTML-in-Canvas) */
 @keyframes ezs-ticker {
   from { transform: translateX(0); }
