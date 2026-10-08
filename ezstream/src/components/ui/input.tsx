@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 
 // Shared so <textarea> and <select> can match <Input>.
 export const fieldStyles =
-  "w-full rounded-field border border-line bg-fg/[0.03] px-4 text-body-sm text-fg placeholder:text-fg-30 transition-colors duration-200 hover:border-fg/20 focus:border-fg/50 focus:bg-fg/[0.05] focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-danger/60"
+  "w-full rounded-field border border-transparent bg-muted px-4 text-body text-fg placeholder:text-fg-30 transition-colors duration-200 hover:bg-elevated focus:border-fg/30 focus:bg-elevated focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-danger/60"
 
 export interface InputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {}

@@ -1,23 +1,26 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { setEmail } from '@/redux/user/userSlice';
 import myRouter from '@/lib/route';
+import { Button } from '@/components/ui/button';
+import { AuthShell } from '../_components/AuthShell';
+import { AuthField, FormError } from '../_components/AuthField';
 
 export default function SignUp() {
-  const router = useRouter();
   const redirect = myRouter();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
   const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
   const dispatch = useDispatch();
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setPending(true);
 
     try {
       const email = formData.email;
@@ -35,96 +38,59 @@ export default function SignUp() {
       // Store token in localStorage or other state management solution
       localStorage.setItem('token', data.token);
       dispatch(setEmail(email));
+      // Stays pending while the transition plays and the studio loads.
       redirect('/call');
     } catch (err) {
-      setError('Failed to create account');
+      setError("Couldn't create your account. Try a different email, or try again in a moment.");
+      setPending(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full flex">
-      {/* Left side - White */}
-      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-6">
-        <div className="w-full max-w-md space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="text-3xl font-bold tracking-tighter text-black">
-              Create Account
-            </h2>
-            <p className="text-zinc-600 text-sm">
-              Start your streaming experience
-            </p>
-          </div>
-
-          <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
-            {error && (
-              <div className="text-red-500 text-sm text-center bg-red-50 py-2 rounded-lg">
-                {error}
-              </div>
-            )}
-            
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <label htmlFor="email" className="block text-sm font-medium text-zinc-700">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  className="block w-full px-4 py-3 rounded-lg bg-white border border-zinc-200 text-black placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all duration-200"
-                  placeholder="name@example.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="password" className="block text-sm font-medium text-zinc-700">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  className="block w-full px-4 py-3 rounded-lg bg-white border border-zinc-200 text-black placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all duration-200"
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 px-4 rounded-lg bg-black text-white font-medium hover:bg-black/90 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 transition-all duration-200"
-            >
-              Create account
-            </button>
-          </form>
-
-          <p className="text-center text-sm text-zinc-600">
-            Already have an account?{' '}
-            <button 
-              onClick={() => redirect('/signin')}
-              className="text-black hover:text-zinc-600 transition-colors font-medium"
-            >
-              Sign in
-            </button>
-          </p>
+    <AuthShell
+      title="create your account"
+      lede="Start a room, compose the shot with overlays and stream it to any RTMP destination."
+      switchTo={{ prompt: 'have an account?', action: 'sign in', onSelect: () => redirect('/signin') }}
+    >
+      <form onSubmit={handleSubmit} aria-busy={pending}>
+        <div className="space-y-4">
+          <AuthField
+            id="email"
+            label="email"
+            type="email"
+            name="email"
+            autoComplete="email"
+            spellCheck={false}
+            required
+            placeholder="you@example.com"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? ERROR_ID : undefined}
+          />
+          <AuthField
+            id="password"
+            label="password"
+            type="password"
+            name="password"
+            autoComplete="new-password"
+            required
+            placeholder="choose a password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? ERROR_ID : undefined}
+          />
         </div>
-      </div>
 
-      {/* Right side - Black */}
-      <div className="hidden lg:flex w-1/2 bg-black items-center justify-center p-6">
-        <div className="max-w-lg">
-          <h1 className="text-4xl lg:text-5xl font-bold text-white mb-4">Join ezStream Today</h1>
-          <p className="text-zinc-400 text-lg">
-            Start broadcasting to multiple platforms with just a few clicks. Experience the future of streaming.
-          </p>
-        </div>
-      </div>
-    </div>
+        <FormError id={ERROR_ID} message={error} />
+
+        <Button type="submit" size="lg" className="mt-6 w-full" disabled={pending}>
+          {pending ? 'creating account…' : 'create account'}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }
+
+const ERROR_ID = 'signup-error';

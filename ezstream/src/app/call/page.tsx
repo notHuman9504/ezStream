@@ -3,9 +3,17 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import io, { Socket } from 'socket.io-client';
 import VideoCanvas, { OverlayRenderer, StreamStatus } from '../components/layout/videoCanvas';
 import OverlayEditor from '../components/layout/overlayEditor';
-import { Video, VideoOff } from 'lucide-react';
+import { ArrowDown } from 'lucide-react';
 import type { CanvasSource } from '@/types/canvas';
 import { defaultOverlay, OverlayConfig } from '@/types/overlay';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Reveal } from '@/components/motion/Reveal';
+import { cn } from '@/lib/utils';
+import { StudioTopBar } from './_components/StudioTopBar';
+import { StudioPanel, FieldLabel, PanelSection } from './_components/StudioPanel';
+import { SourceTile, InviteTile, SourcesPlaceholder } from './_components/SourceTile';
+import { getStreamPhase, StreamStatusLine } from './_components/streamStatus';
 
 const CALLING_SERVER_URL =
   process.env.NEXT_PUBLIC_CALLING_SERVER_URL || 'https://ezstream-callingserver.onrender.com';
@@ -765,173 +773,275 @@ export default function CallPage() {
     );
   };
 
+  // ---- Presentation (derived only) ----
+
+  const room = activeRoom || roomId;
+  const streamPhase = getStreamPhase(isStreaming, streamState, streamError);
+  const sourceCount = selectedSources.length;
+
   return (
-    <div className="min-h-screen bg-black text-white p-8">
-      {/* Main Container */}
-      <div className="max-w-[2000px] mx-auto">
-        {/* Top Section - Canvas and Room Join */}
-        <div className="flex gap-8 mb-8 h-[400px]">
-          {/* Canvas Section - Left */}
-          <div className="flex-1 bg-zinc-900 rounded-xl overflow-hidden shadow-2xl flex items-center justify-center">
-            <VideoCanvas
-              sources={selectedSources}
-              overlay={overlay}
-              isStreaming={isStreaming}
-              streamingSocket={streamingSocket}
-              rtmpUrl={rtmpUrl}
-              streamKey={streamKey}
-              width={1280}
-              height={720}
-              fps={30}
-              bitrate={2_500_000}
-              onStatusChange={handleStreamStatus}
-              onRendererChange={setOverlayRenderer}
-            />
-          </div>
+    <main className="min-h-screen pb-16 pt-28 text-fg sm:pt-32">
+      <div className="shell">
+        <Reveal y={16}>
+          <StudioTopBar
+            room={room}
+            joinedRoom={activeRoom}
+            peopleInCall={peerCount + 1}
+            phase={streamPhase}
+            error={streamError}
+          />
+        </Reveal>
 
-          {/* Room Controls - Right */}
-          <div className="w-[500px] bg-zinc-900 p-4 rounded-xl shadow-2xl">
-            <div className="flex gap-4">
-              {/* Join Room Section */}
-              <div className="flex-1">
-                <h1 className="text-xl font-bold mb-4 text-white">Room: {activeRoom || roomId}</h1>
-                <input
-                  type="text"
-                  placeholder="Enter new room ID"
-                  className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
-                  value={roomId}
-                  maxLength={64}
-                  onChange={(e) => setRoomId(e.target.value)}
-                />
-                {roomError && (
-                  <p className="mb-3 text-sm text-red-400">{roomError}</p>
-                )}
-                <div className="flex flex-col gap-3">
-                  <button
-                    onClick={changeRoom}
-                    className="w-full py-3 rounded-lg bg-white text-black font-semibold hover:bg-zinc-200 transition-colors"
-                  >
-                    Change Room
-                  </button>
-                  <button
-                    onClick={toggleScreenShare}
-                    className={`w-full py-3 rounded-lg font-semibold transition-colors ${
-                      isScreenSharing
-                        ? 'bg-zinc-800 text-white hover:bg-zinc-700'
-                        : 'bg-white text-black hover:bg-zinc-200'
-                    }`}
-                  >
-                    {isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
-                  </button>
-                </div>
-      </div>
-
-              {/* Streaming Controls */}
-              <div className="flex-1 border-l border-zinc-800 pl-4">
-                <h2 className="text-xl font-bold mb-4">Stream Settings</h2>
-        <input
-          type="text"
-                  placeholder="RTMP URL"
-                  value={rtmpUrl}
-                  onChange={(e) => setRtmpUrl(e.target.value)}
-                  className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
-                />
-                <input
-                  type="password"
-                  placeholder="Stream Key"
-                  value={streamKey}
-                  onChange={(e) => setStreamKey(e.target.value)}
-                  className="w-full mb-3 p-3 rounded-lg bg-black border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white"
-        />
-        <button
-                  onClick={() => setIsStreaming(!isStreaming)}
-                  disabled={selectedSources.length === 0}
-                  className={`w-full py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
-                    isStreaming
-                      ? 'bg-zinc-800 text-white hover:bg-zinc-700'
-                      : 'bg-white text-black hover:bg-zinc-200'
-                  } ${selectedSources.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+        {/* Mobile order: program, controls, overlay. From lg the controls get their own column. */}
+        <div className="mt-8 grid gap-3 sm:mt-10 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start xl:grid-cols-[minmax(0,1fr)_420px]">
+          {/* Not wrapped in <Reveal>: the canvas and its HTML overlay stay fully painted from the first frame. */}
+          <section
+            aria-label="Program monitor"
+            className={cn(
+              'min-w-0 rounded-card bg-surface p-2 ring-1 ring-transparent transition-shadow duration-700 sm:p-2.5 lg:col-start-1 lg:row-start-1',
+              streamPhase === 'live' && 'ring-brand/60'
+            )}
+          >
+            <div className="flex items-center justify-between gap-3 px-2.5 pb-2.5 pt-1.5 sm:px-3 sm:pb-3 sm:pt-2">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="inline-flex items-center gap-2 text-tag text-fg">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'size-1.5 shrink-0 rounded-full transition-colors duration-500 motion-reduce:animate-none',
+                      streamPhase === 'live'
+                        ? 'bg-brand animate-live-pulse'
+                        : streamPhase === 'connecting'
+                          ? 'bg-fg-64 animate-live-pulse'
+                          : 'bg-fg-30'
+                    )}
+                  />
+                  program
+                </span>
+                <span className="hidden items-center gap-2 truncate text-small tabular-nums text-fg-50 min-[400px]:inline-flex">
+                  1280×720
+                  <span aria-hidden className="size-1 rounded-full bg-fg-30" />
+                  30 fps
+                </span>
+              </div>
+              {sourceCount > 0 ? (
+                <span className="shrink-0 text-small tabular-nums text-fg-50">
+                  {sourceCount} on program
+                </span>
+              ) : (
+                <a
+                  href="#sources"
+                  className="group inline-flex shrink-0 items-center gap-1.5 rounded-full text-small font-medium text-fg-64 transition-colors hover:text-fg"
                 >
-                  {isStreaming ? (
-                    <>
-                      <VideoOff className="w-4 h-4" />
-                      Stop Streaming
-                    </>
-                  ) : (
-                    <>
-                      <Video className="w-4 h-4" />
-                      Start Streaming
-                    </>
-                  )}
-        </button>
-                {(isStreaming || streamError) && (
-                  <p className={`mt-3 text-sm ${streamError ? 'text-red-400' : 'text-zinc-400'}`}>
-                    {streamError ||
-                      (streamState === 'live' ? '● Live' : streamState === 'starting' ? 'Connecting…' : '')}
+                  add sources
+                  <ArrowDown
+                    aria-hidden
+                    className="size-3.5 transition-transform duration-500 ease-spring group-hover:translate-y-0.5 motion-reduce:transition-none"
+                  />
+                </a>
+              )}
+            </div>
+            <div className="relative aspect-video overflow-hidden rounded-field bg-background">
+              <VideoCanvas
+                sources={selectedSources}
+                overlay={overlay}
+                isStreaming={isStreaming}
+                streamingSocket={streamingSocket}
+                rtmpUrl={rtmpUrl}
+                streamKey={streamKey}
+                width={1280}
+                height={720}
+                fps={30}
+                bitrate={2_500_000}
+                onStatusChange={handleStreamStatus}
+                onRendererChange={setOverlayRenderer}
+              />
+            </div>
+          </section>
+
+          {/* Sticky only when both panels fit under the header */}
+          <Reveal
+            y={16}
+            delay={0.1}
+            className="flex min-w-0 flex-col gap-3 sm:gap-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:[@media(min-height:900px)]:sticky lg:[@media(min-height:900px)]:top-28"
+          >
+            <StudioPanel title="room" description="Move this studio to another room by its ID.">
+              <form
+                noValidate
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  changeRoom();
+                }}
+              >
+                <FieldLabel htmlFor="room-id">room id</FieldLabel>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="room-id"
+                    type="text"
+                    placeholder="enter a room id"
+                    value={roomId}
+                    maxLength={64}
+                    onChange={(e) => setRoomId(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-invalid={roomError ? true : undefined}
+                    aria-describedby={roomError ? 'room-error' : undefined}
+                    className="min-w-0 sm:flex-1"
+                  />
+                  <Button type="submit" variant="secondary" className="w-full sm:w-auto">
+                    change room
+                  </Button>
+                </div>
+                {roomError && (
+                  <p id="room-error" role="alert" className="mt-2 text-small text-danger">
+                    {roomError}
                   </p>
                 )}
-              </div>
-            </div>
-          </div>
-        </div>
+              </form>
 
-        {/* Overlay Section */}
-        <div className="bg-zinc-900 p-6 rounded-xl shadow-2xl mt-4">
-          <OverlayEditor value={overlay} onChange={setOverlay} renderer={overlayRenderer} />
-        </div>
-
-        {/* Video Grid Section */}
-        <div className="bg-zinc-900 p-6 rounded-xl shadow-2xl mt-4">
-          <h2 className="text-xl font-bold mb-4">
-            Available Streams
-            <span className="ml-3 text-sm font-normal text-zinc-500">
-              {peerCount + 1} in call
-            </span>
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-            {tiles.map((tile) => {
-              const selectionIndex = selectedStreamIds.indexOf(tile.id);
-              return (
-                <div
-                  key={tile.id}
-                  className="relative aspect-video bg-black rounded-lg overflow-hidden group cursor-pointer transform hover:scale-[1.02] transition-transform"
-                  onClick={() => toggleSelection(tile.id)}
+              <PanelSection>
+                <Button
+                  type="button"
+                  variant={isScreenSharing ? 'primary' : 'secondary'}
+                  className="w-full"
+                  onClick={toggleScreenShare}
                 >
-                  <video
-                    ref={getVideoRef(tile.id, tile.stream)}
-                    autoPlay
-                    playsInline
-                    muted={tile.isLocal}
-                    className={`w-full h-full ${tile.isScreen ? 'object-contain' : 'object-cover'}`}
-                    onLoadedMetadata={(e) => {
-                      // Ensure video plays when metadata is loaded
-                      const video = e.target as HTMLVideoElement;
-                      if (video.paused) {
-                        video.play().catch(err => {
-                          if (err.name !== 'AbortError') {
-                            console.error('Error playing video:', err);
-                          }
-                        });
-                      }
-                    }}
+                  {isScreenSharing ? 'stop sharing' : 'share screen'}
+                </Button>
+                <p className="mt-3 text-center text-small text-fg-50">
+                  {isScreenSharing
+                    ? 'Your screen is shared with the room and listed under sources.'
+                    : 'Adds your screen as its own source and shares it with the room.'}
+                </p>
+              </PanelSection>
+            </StudioPanel>
+
+            <StudioPanel title="destination" description="Any RTMP server, such as YouTube Live or Twitch.">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <FieldLabel htmlFor="rtmp-url">rtmp url</FieldLabel>
+                  <Input
+                    id="rtmp-url"
+                    type="text"
+                    inputMode="url"
+                    placeholder="rtmp://a.rtmp.youtube.com/live2"
+                    value={rtmpUrl}
+                    onChange={(e) => setRtmpUrl(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center text-sm">
-                    <span className="bg-black/50 px-2 py-1 rounded">
-                      {tile.label}
-                    </span>
-                    {selectionIndex !== -1 && (
-                      <span className="bg-white text-black px-2 py-1 rounded-full text-xs">
-                        Selected {selectionIndex + 1}
-                      </span>
-                    )}
-                  </div>
                 </div>
-              );
-            })}
-          </div>
+                <div>
+                  <FieldLabel htmlFor="stream-key">stream key</FieldLabel>
+                  <Input
+                    id="stream-key"
+                    type="password"
+                    placeholder="paste the key from your platform"
+                    value={streamKey}
+                    onChange={(e) => setStreamKey(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+
+              <PanelSection>
+                <Button
+                  type="button"
+                  variant={isStreaming ? 'danger' : 'primary'}
+                  size="lg"
+                  className="w-full"
+                  onClick={() => setIsStreaming(!isStreaming)}
+                  disabled={!isStreaming && selectedSources.length === 0}
+                  aria-describedby="stream-status"
+                >
+                  {isStreaming ? 'end stream' : 'go live'}
+                </Button>
+                <StreamStatusLine
+                  id="stream-status"
+                  phase={streamPhase}
+                  error={streamError}
+                  sourceCount={sourceCount}
+                />
+              </PanelSection>
+            </StudioPanel>
+          </Reveal>
+
+          <Reveal y={16} delay={0.15} className="min-w-0 lg:col-start-1 lg:row-start-2">
+            <div className="rounded-card bg-surface p-5 sm:p-6">
+              <OverlayEditor value={overlay} onChange={setOverlay} renderer={overlayRenderer} />
+            </div>
+          </Reveal>
         </div>
+
+        {/* Not wrapped in <Reveal>: these <video> elements feed the canvas and stay fully visible. */}
+        <section
+          id="sources"
+          aria-labelledby="sources-title"
+          className="mt-3 scroll-mt-28 rounded-card bg-surface p-5 sm:mt-4 sm:scroll-mt-32 sm:p-6"
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-3">
+                <h2 id="sources-title" className="text-h4">
+                  sources
+                </h2>
+                <span className="text-small tabular-nums text-fg-50">{peerCount + 1} in call</span>
+              </div>
+              <p className="mt-1.5 text-body-sm text-fg-50">
+                Click a tile to add it to the program. Click again to take it off.
+              </p>
+            </div>
+            {tiles.length > 0 && (
+              <span className="shrink-0 text-small tabular-nums text-fg-50">
+                <span className="text-fg">{selectedStreamIds.length}</span> of {tiles.length} selected
+              </span>
+            )}
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-3 min-[440px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {tiles.length === 0 ? (
+              <SourcesPlaceholder />
+            ) : (
+              <>
+                {tiles.map((tile) => {
+                  const selectionIndex = selectedStreamIds.indexOf(tile.id);
+                  return (
+                    <SourceTile
+                      key={tile.id}
+                      // Lowercase only your own tiles ("you"); peer IDs keep their case to match the program's name tags.
+                      label={tile.isLocal ? tile.label.toLowerCase() : tile.label}
+                      isScreen={tile.isScreen}
+                      order={selectionIndex === -1 ? null : selectionIndex + 1}
+                      onToggle={() => toggleSelection(tile.id)}
+                    >
+                      <video
+                        ref={getVideoRef(tile.id, tile.stream)}
+                        autoPlay
+                        playsInline
+                        muted={tile.isLocal}
+                        className={`w-full h-full ${tile.isScreen ? 'object-contain' : 'object-cover'}`}
+                        onLoadedMetadata={(e) => {
+                          // Ensure video plays when metadata is loaded
+                          const video = e.target as HTMLVideoElement;
+                          if (video.paused) {
+                            video.play().catch(err => {
+                              if (err.name !== 'AbortError') {
+                                console.error('Error playing video:', err);
+                              }
+                            });
+                          }
+                        }}
+                      />
+                    </SourceTile>
+                  );
+                })}
+                {peerCount === 0 && <InviteTile room={activeRoom} />}
+              </>
+            )}
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

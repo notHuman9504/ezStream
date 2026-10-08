@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useEffect, useRef, useState } from "react"
-import { AnimatePresence, motion } from "framer-motion"
+import React, { Fragment, useEffect, useRef, useState } from "react"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { Github, X } from "lucide-react"
 import { usePathname } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '@/redux/store'
@@ -9,7 +10,7 @@ import { setEmail } from '@/redux/user/userSlice'
 import myRouter from '@/lib/route'
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Logo } from "@/components/brand/Logo"
+import { LogoMark } from "@/components/brand/Logo"
 import { EASE_OUT_EXPO } from "@/components/motion/Reveal"
 
 interface NavItem {
@@ -18,8 +19,8 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { name: 'Home', url: '/' },
-  { name: 'Studio', url: '/call' },
+  { name: 'home', url: '/' },
+  { name: 'studio', url: '/call' },
 ]
 
 export default function Header() {
@@ -28,25 +29,31 @@ export default function Header() {
   const dispatch = useDispatch()
   const userEmail = useSelector((state: RootState) => state.user.email)
   const [menuOpen, setMenuOpen] = useState(false)
-  const progress = useScrollProgress()
-  const menuRef = useRef<HTMLDivElement>(null)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const wasOpen = useRef(false)
 
   useEffect(() => {
     setMenuOpen(false)
   }, [pathname])
 
+  // Lock page scroll and listen for Escape while the sheet is open; hand focus
+  // back to the menu button when it closes.
   useEffect(() => {
-    if (!menuOpen) return
-    const onPointerDown = (e: PointerEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false)
+    if (!menuOpen) {
+      if (wasOpen.current) menuButtonRef.current?.focus()
+      wasOpen.current = false
+      return
     }
+    wasOpen.current = true
+    const root = document.documentElement
+    const previousOverflow = root.style.overflow
+    root.style.overflow = 'hidden'
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setMenuOpen(false)
     }
-    document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
+      root.style.overflow = previousOverflow
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [menuOpen])
@@ -63,178 +70,168 @@ export default function Header() {
     redirect('/')
   }
 
+  const menuLinks: MenuLink[] = [
+    { label: 'home', url: '/', onSelect: () => go('/') },
+    { label: 'studio', url: '/call', onSelect: () => go('/call') },
+    ...(userEmail
+      ? [{ label: 'log out', onSelect: logout }]
+      : [
+          { label: 'sign in', url: '/signin', onSelect: () => go('/signin') },
+          { label: 'create account', url: '/signup', onSelect: () => go('/signup') },
+        ]),
+  ]
+
   return (
-    <header className="pointer-events-none fixed inset-x-0 top-0 z-50">
-      <div className="shell relative flex h-[72px] items-center justify-between gap-3">
-        <button
-          onClick={() => go('/')}
-          className="pointer-events-auto rounded-md"
-          aria-label="ezStream home"
-        >
-          <Logo wordmarkClassName="hidden sm:inline" />
-        </button>
+    <>
+      <header className="pointer-events-none fixed inset-x-0 top-0 z-50">
+        {/* Keeps the nav legible over content scrolling underneath */}
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-background via-background/80 to-transparent sm:h-32"
+        />
+        <div className="shell relative flex h-20 items-center justify-between gap-3 sm:h-24">
+          <button
+            onClick={() => go('/')}
+            className="pointer-events-auto rounded-full transition-transform duration-500 ease-spring hover:-rotate-12 hover:scale-105"
+            aria-label="ezstream home"
+          >
+            <LogoMark className="size-12 sm:size-14" />
+          </button>
 
-        {/* Center pill: menu + scroll progress */}
-        <div ref={menuRef} className="pointer-events-auto absolute left-1/2 -translate-x-1/2">
-          <div className="flex items-center gap-1 rounded-full bg-elevated/90 p-1 shadow-[0_8px_30px_rgb(0_0_0/0.35)] backdrop-blur-md">
-            <button
-              onClick={() => setMenuOpen(open => !open)}
-              aria-expanded={menuOpen}
-              aria-controls="site-menu"
-              className="flex h-8 items-center gap-2.5 rounded-full pl-3 pr-3 text-btn text-fg transition-colors hover:bg-fg/[0.06]"
-            >
-              <MenuIcon open={menuOpen} />
-              {menuOpen ? 'Close' : 'Menu'}
-            </button>
-            <span
-              className="hidden h-8 min-w-[3.25rem] items-center justify-center rounded-full bg-fg/20 px-2.5 text-small tabular-nums text-fg sm:flex"
-              aria-label={`Scrolled ${progress}%`}
-            >
-              {progress}%
-            </span>
-          </div>
+          <nav
+            aria-label="Main"
+            className="pointer-events-auto flex items-center gap-3 text-body-lg font-medium sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:gap-4"
+          >
+            {navItems.map((item, i) => {
+              const isActive = pathname === item.url
+              return (
+                <Fragment key={item.url}>
+                  {i > 0 && <span aria-hidden className="size-1.5 rounded-full bg-fg" />}
+                  <button
+                    onClick={() => go(item.url)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={cn("rounded-md transition-colors", isActive ? "text-fg" : "text-fg-50 hover:text-fg")}
+                  >
+                    {item.name}
+                  </button>
+                </Fragment>
+              )
+            })}
+          </nav>
 
-          <AnimatePresence>
-            {menuOpen && (
-              <div className="absolute left-1/2 top-full w-[min(calc(100vw-2rem),380px)] -translate-x-1/2 pt-2">
-                <motion.div
-                  id="site-menu"
-                  initial={{ opacity: 0, y: -8, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: 0.18 } }}
-                  transition={{ duration: 0.45, ease: EASE_OUT_EXPO }}
-                  className="origin-top rounded-tile border border-fg/[0.06] bg-elevated/95 p-2 shadow-[0_24px_60px_rgb(0_0_0/0.5)] backdrop-blur-xl"
-                >
-                  <nav className="flex flex-col">
-                    {navItems.map((item, i) => {
-                      const isActive = pathname === item.url
-                      return (
-                        <button
-                          key={item.url}
-                          onClick={() => go(item.url)}
-                          aria-current={isActive ? 'page' : undefined}
-                          className={cn(
-                            "group flex items-baseline justify-between rounded-field px-4 py-3 text-left transition-colors hover:bg-fg/[0.06]",
-                            isActive ? "text-fg" : "text-fg-64 hover:text-fg"
-                          )}
-                        >
-                          <span className="text-h4">{item.name}</span>
-                          <span className="text-small tabular-nums text-fg-30">0{i + 1}</span>
-                        </button>
-                      )
-                    })}
-                  </nav>
-
-                  <div className="mt-2 flex items-center justify-between gap-3 border-t border-line px-4 pb-2 pt-3">
-                    {userEmail ? (
-                      <>
-                        <span className="truncate text-small text-fg-50" title={userEmail}>
-                          {userEmail}
-                        </span>
-                        <Button size="sm" variant="secondary" onClick={logout}>
-                          Log out
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-small text-fg-50">Not signed in</span>
-                        <Button size="sm" variant="secondary" onClick={() => go('/signin')}>
-                          Sign in
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
+          <Button
+            ref={menuButtonRef}
+            onClick={() => setMenuOpen(true)}
+            aria-expanded={menuOpen}
+            aria-controls="site-menu"
+            className="pointer-events-auto"
+          >
+            menu
+          </Button>
         </div>
+      </header>
 
-        {/* Account actions */}
-        <div className="pointer-events-auto flex items-center gap-2">
-          {userEmail ? (
-            <>
-              <span
-                className="hidden size-8 items-center justify-center rounded-full bg-fg/10 text-small uppercase text-fg sm:flex"
-                title={userEmail}
-                aria-label={`Signed in as ${userEmail}`}
-              >
-                {userEmail.charAt(0)}
-              </span>
-              {pathname === '/call' ? (
-                <Button size="sm" variant="secondary" onClick={logout}>
-                  Log out
-                </Button>
-              ) : (
-                <Button size="sm" onClick={() => go('/call')}>
-                  Open studio
-                </Button>
-              )}
-            </>
-          ) : (
-            <>
-              {pathname !== '/signin' && (
-                <Button size="sm" variant="ghost" className="hidden sm:inline-flex" onClick={() => go('/signin')}>
-                  Sign in
-                </Button>
-              )}
-              <Button size="sm" onClick={() => go('/signup')}>
-                Get started
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-    </header>
+      <AnimatePresence>
+        {menuOpen && (
+          <MenuSheet
+            links={menuLinks}
+            pathname={pathname}
+            userEmail={userEmail}
+            onClose={() => setMenuOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+    </>
   )
 }
 
-function MenuIcon({ open }: { open: boolean }) {
-  return (
-    <span aria-hidden className="relative block h-2.5 w-4">
-      <span
-        className={cn(
-          "absolute left-0 top-0 h-px w-4 bg-fg transition-transform duration-300 ease-out",
-          open && "translate-y-[4.5px] rotate-45"
-        )}
-      />
-      <span
-        className={cn(
-          "absolute bottom-0 left-0 h-px w-4 bg-fg transition-transform duration-300 ease-out",
-          open && "-translate-y-[4.5px] -rotate-45"
-        )}
-      />
-    </span>
-  )
+interface MenuLink {
+  label: string
+  url?: string
+  onSelect: () => void
 }
 
-function useScrollProgress() {
-  const [progress, setProgress] = useState(0)
+type MenuSheetProps = {
+  links: MenuLink[]
+  pathname: string
+  userEmail: string
+  onClose: () => void
+}
+
+// Full-screen light sheet with oversized links, inset from the viewport edges.
+function MenuSheet({ links, pathname, userEmail, onClose }: MenuSheetProps) {
+  const reduce = useReducedMotion()
+  const closeRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
-    let frame = 0
-    const update = () => {
-      frame = 0
-      const max = document.documentElement.scrollHeight - window.innerHeight
-      const next = max > 0 ? Math.round((window.scrollY / max) * 100) : 0
-      setProgress(Math.min(100, Math.max(0, next)))
-    }
-    const onScroll = () => {
-      if (!frame) frame = requestAnimationFrame(update)
-    }
-    update()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onScroll)
-    // Page height changes on navigation and as content loads.
-    const observer = new ResizeObserver(onScroll)
-    observer.observe(document.body)
-    return () => {
-      window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('resize', onScroll)
-      observer.disconnect()
-      if (frame) cancelAnimationFrame(frame)
-    }
+    closeRef.current?.focus()
   }, [])
 
-  return progress
+  return (
+    <motion.div
+      id="site-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Menu"
+      className="fixed inset-0 z-[60] p-3 sm:p-5"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.3, delay: 0.15 } }}
+    >
+      <div aria-hidden className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={onClose} />
+
+      <motion.div
+        className="relative flex h-full flex-col overflow-y-auto rounded-card bg-fg p-5 text-background sm:p-6"
+        initial={reduce ? false : { clipPath: 'inset(0% 0% 100% 0% round 20px)' }}
+        animate={{ clipPath: 'inset(0% 0% 0% 0% round 20px)' }}
+        exit={reduce ? undefined : { clipPath: 'inset(0% 0% 100% 0% round 20px)' }}
+        transition={{ duration: 0.75, ease: EASE_OUT_EXPO }}
+      >
+        <div className="flex justify-end">
+          <button
+            ref={closeRef}
+            onClick={onClose}
+            className="group flex items-center gap-3 rounded-full text-btn"
+          >
+            close
+            <span className="grid size-12 place-items-center rounded-full bg-background text-fg transition-transform duration-500 ease-spring group-hover:rotate-90">
+              <X aria-hidden className="size-5" />
+            </span>
+          </button>
+        </div>
+
+        <nav className="group/nav my-auto flex flex-col items-start gap-1 py-10 sm:gap-2">
+          {links.map((link, i) => (
+            // Padding keeps descenders inside the reveal mask
+            <span key={link.label} className="-mb-[0.15em] block overflow-hidden pb-[0.15em] text-mega">
+              <motion.button
+                onClick={link.onSelect}
+                aria-current={link.url === pathname ? 'page' : undefined}
+                className="flex items-center gap-4 text-left transition-[padding,opacity] duration-500 ease-spring hover:!opacity-100 group-hover/nav:opacity-30 sm:hover:pl-6"
+                initial={reduce ? false : { y: '100%' }}
+                animate={{ y: 0 }}
+                transition={{ duration: 0.9, ease: EASE_OUT_EXPO, delay: 0.12 + i * 0.05 }}
+              >
+                {link.label}
+                {link.url === pathname && <span aria-hidden className="size-3 rounded-full bg-current" />}
+              </motion.button>
+            </span>
+          ))}
+        </nav>
+
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <span className="text-body-sm font-medium">{userEmail || 'live studio in your browser'}</span>
+          <a
+            href="https://github.com/notHuman9504/ezStream"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="ezstream on GitHub"
+            className="grid size-12 place-items-center rounded-full bg-background text-fg transition-transform duration-500 ease-spring hover:scale-110"
+          >
+            <Github aria-hidden className="size-5" />
+          </a>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
 }

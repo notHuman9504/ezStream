@@ -227,7 +227,7 @@ const VideoCanvas: React.FC<VideoCanvasProps> = ({
       ref={canvasRef}
       width={width}
       height={height}
-      className="w-full h-full object-contain"
+      className="block h-full w-full object-contain"
       // HTML-in-Canvas opt-in (old and new attribute names). It has to be present
       // when the children are first laid out, so it can't be added later.
       {...{ layoutsubtree: '', content: 'drawable' }}

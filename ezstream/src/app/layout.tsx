@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next"
-import { Inter } from "next/font/google"
+import { Inter_Tight } from "next/font/google"
 import "./globals.css"
 import Header from "./components/layout/Header"
 import ReduxWrapper from "@/redux/ReduxWrapper"
 
 
-const inter = Inter({
+const sans = Inter_Tight({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#020108",
+  themeColor: "#0a0a0a",
   colorScheme: "dark",
 }
 
@@ -32,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={sans.variable}>
       {htmlInCanvasToken && (
         <head>
           <meta httpEquiv="origin-trial" content={htmlInCanvasToken} />

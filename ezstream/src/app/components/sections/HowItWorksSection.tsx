@@ -1,76 +1,71 @@
-import { motion } from 'framer-motion';
-import { useInView } from 'react-intersection-observer';
-import { ArrowRight } from 'lucide-react';
+"use client"
 
-const steps = [
-  {
-    number: "01",
-    title: "Sign Up",
-    description: "Create your account in seconds with just your email"
-  },
-  {
-    number: "02",
-    title: "Configure Stream",
-    description: "Choose your platforms and customize your stream settings"
-  },
-  {
-    number: "03",
-    title: "Go Live",
-    description: "Start streaming to multiple platforms with one click"
-  }
-];
+import myRouter from "@/lib/route"
+import { Button } from "@/components/ui/button"
+import { Tag } from "@/components/ui/tag"
+import { MaskLines, Reveal } from "@/components/motion/Reveal"
+import { FeedArt, type ArtKind } from "./FeedArt"
 
-const HowItWorksSection = () => {
-  const [ref, inView] = useInView({
-    triggerOnce: true,
-    threshold: 0.1,
-  });
+// Three rounded sheets, each a vivid media block over a title and a short line.
+// A centered column, side by side on very wide screens.
+export default function HowItWorksSection() {
+  const redirect = myRouter()
 
   return (
-    <section className="w-full py-20 bg-black">
-      <motion.div
-        ref={ref}
-        initial={{ opacity: 0, y: 50 }}
-        animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
-        transition={{ duration: 0.5 }}
-        className="container mx-auto px-4"
-      >
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Start Streaming in Minutes
-          </h2>
-          <p className="text-zinc-400 max-w-2xl mx-auto">
-            Three simple steps to go live on multiple platforms
-          </p>
+    <section id="how-it-works" className="py-24 sm:py-32">
+      <div className="shell">
+        <div className="flex flex-col items-center gap-5 text-center">
+          <Reveal>
+            <Tag marker="paren">how it works</Tag>
+          </Reveal>
+          <MaskLines
+            as="h2"
+            className="text-h2"
+            lines={["three steps,", "one browser tab"]}
+          />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {steps.map((step, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, x: -20 }}
-              animate={inView ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
-              transition={{ duration: 0.5, delay: index * 0.2 }}
-              className="relative p-6 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-all duration-300"
-            >
-              <div className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-blue-500 mb-4">
-                {step.number}
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">
-                {step.title}
-              </h3>
-              <p className="text-zinc-400">
-                {step.description}
-              </p>
-              {index < steps.length - 1 && (
-                <ArrowRight className="absolute -right-4 top-1/2 transform -translate-y-1/2 text-zinc-700 hidden md:block" />
-              )}
-            </motion.div>
+        <ol className="mx-auto mt-14 grid max-w-[720px] gap-4 sm:mt-20 sm:gap-6 xl:max-w-[1440px] xl:grid-cols-3">
+          {STEPS.map((step, i) => (
+            <li key={step.title}>
+              <Reveal delay={i * 0.08} className="h-full">
+                <article className="flex h-full flex-col rounded-card bg-surface p-2 sm:p-3">
+                  <FeedArt kind={step.art} className="aspect-[16/10] rounded-tile" />
+                  <div className="flex flex-1 flex-col items-start px-3 pb-4 pt-6 sm:px-5 sm:pb-6 sm:pt-8">
+                    <Tag marker="paren">{`0${i + 1}`}</Tag>
+                    <h3 className="mt-3 text-h3 sm:text-h2">{step.title}</h3>
+                    <p className="mt-3 max-w-[44ch] text-body text-fg-64">{step.body}</p>
+                    {step.cta && (
+                      <div className="mt-auto pt-8">
+                        <Button onClick={() => redirect("/call")}>open the studio</Button>
+                      </div>
+                    )}
+                  </div>
+                </article>
+              </Reveal>
+            </li>
           ))}
-        </div>
-      </motion.div>
+        </ol>
+      </div>
     </section>
-  );
-};
+  )
+}
 
-export default HowItWorksSection;
+const STEPS: { title: string; art: ArtKind; body: string; cta?: boolean }[] = [
+  {
+    title: "open a room",
+    art: "room",
+    body: "The studio opens a room the moment it loads. Share the room ID and guests join from their own browser with camera and mic, nothing to install.",
+  },
+  {
+    title: "compose the shot",
+    art: "compose",
+    body: "Click a tile to put it on the program, switch between grid, spotlight and sidebar, then add a title, lower third or ticker in your accent color.",
+  },
+  {
+    title: "go live",
+    art: "golive",
+    body: "Paste your platform's RTMP URL and stream key, then press go live. The program goes out at 1280×720 and 30 fps until you end the stream.",
+    cta: true,
+  },
+]

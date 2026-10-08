@@ -10,9 +10,7 @@ const Initializer = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setTimeout(() => {
-      checkAuth();
-    }, 1700);
+    checkAuth();
   }, [dispatch]);
 
   const checkAuth = async () => {

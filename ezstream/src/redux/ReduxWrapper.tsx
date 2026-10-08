@@ -2,7 +2,7 @@
 import { Provider } from 'react-redux';
 import store from './store';
 import Initializer from '@/components/Initializer';
-import SlidingDiv from '@/app/components/ui/slidingDiv';
+import PageTransition from '@/app/components/ui/pageTransition';
 
 interface ReduxWrapperProps {
   children: React.ReactNode;
@@ -11,11 +11,7 @@ interface ReduxWrapperProps {
 const ReduxWrapper = ({ children }: ReduxWrapperProps) => {
   return (
     <Provider store={store}>
-      <SlidingDiv delay={0} color="white" />
-      <SlidingDiv delay={2} color="black" />
-      <SlidingDiv delay={3.5} color="white" />
-      <SlidingDiv delay={4.6} color="black" />
-      <SlidingDiv delay={5.5} color="white" />
+      <PageTransition />
       <Initializer>
         {children}
       </Initializer>

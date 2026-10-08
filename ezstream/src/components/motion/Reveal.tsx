@@ -13,7 +13,7 @@ type RevealProps = HTMLMotionProps<"div"> & {
 }
 
 // Fades and lifts its children into place the first time they scroll into view.
-export function Reveal({ delay = 0, y = 24, once = true, children, ...props }: RevealProps) {
+export function Reveal({ delay = 0, y = 12, once = true, children, ...props }: RevealProps) {
   const reduce = useReducedMotion()
 
   return (
@@ -21,7 +21,7 @@ export function Reveal({ delay = 0, y = 24, once = true, children, ...props }: R
       initial={reduce ? false : { opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once, margin: "0px 0px -10% 0px" }}
-      transition={{ duration: 0.9, ease: EASE_OUT_EXPO, delay }}
+      transition={{ duration: 0.7, ease: EASE_OUT_EXPO, delay }}
       {...props}
     >
       {children}
